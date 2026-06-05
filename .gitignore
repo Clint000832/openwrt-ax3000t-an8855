@@ -1,0 +1,17 @@
+# 忽略 OpenWrt 构建目录
+openwrt-build-*
+openwrt_compile_database/
+
+# 忽略大文件追踪（固件仅保留参考）
+*.bin
+*.img
+
+# Python cached
+__pycache__/
+*.pyc
+
+# Editor temp files
+*.swp
+*.swo
+*~
+.DS_Store
