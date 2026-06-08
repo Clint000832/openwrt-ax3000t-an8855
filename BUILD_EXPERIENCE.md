@@ -60,7 +60,7 @@ CONFIG_DEVICE_xiaomi_mi-router-ax3000t-an8855=y
 
 ## 3. 核心改动
 
-共修改/创建 **5 个文件**，分为两个层面：
+共修改/创建 **6 个文件**，分为两个层面：
 
 ### 3.1 设备定义（OpenWrt 主线源码改动）
 
@@ -70,6 +70,7 @@ CONFIG_DEVICE_xiaomi_mi-router-ax3000t-an8855=y
 | `target/linux/mediatek/image/filogic.mk` | **修改** | 添加 `xiaomi_mi-router-ax3000t-an8855` 镜像构建目标 |
 | `target/linux/mediatek/filogic/base-files/etc/board.d/02_network` | **修改** | 新增 AN8855 的 VLAN 划分和 MAC 地址获取规则 |
 | `target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh` | **修改** | 添加 AN8855 的 mtdparts 初始化和系统升级入口 |
+| `target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults` | **修改** | 添加 AN8855 默认 WiFi 配置（首次启动自动开启） |
 
 ### 3.2 编译环境适配（WSL 专有）
 
