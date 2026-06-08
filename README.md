@@ -285,7 +285,7 @@ openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-squashfs-sysupgrade.bin
 #### 方法一：通过 LuCI Web 界面
 
 1. 路由器正常启动 OpenWrt
-2. 浏览器访问 `192.168.1.1`
+2. 浏览器访问 `192.168.31.1`
 3. 进入 **System → Backup / Flash Firmware**
 4. 选择 sysupgrade 固件，上传并刷入
 
@@ -293,10 +293,10 @@ openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-squashfs-sysupgrade.bin
 
 ```bash
 # 上传固件
-scp openwrt-*-squashfs-sysupgrade.bin root@192.168.1.1:/tmp/
+scp openwrt-*-squashfs-sysupgrade.bin root@192.168.31.1:/tmp/
 
 # 登录并刷入
-ssh root@192.168.1.1
+ssh root@192.168.31.1
 sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin
 ```
 
@@ -318,7 +318,7 @@ sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin
 | 5GHz | `OpenWrt-AX3000T-5G` | 开放（无密码） |
 
 > **⚠️ 安全提示：** 首次连接后请尽快通过 LuCI 或 SSH 设置密码：
-> - 浏览器访问 `192.168.1.1` 进入 LuCI 管理界面
+> - 浏览器访问 `192.168.31.1` 进入 LuCI 管理界面
 > - 或在 SSH 中运行 `passwd` 设置 root 密码
 > - 在 **Network → Wireless** 中配置 WiFi 加密
 

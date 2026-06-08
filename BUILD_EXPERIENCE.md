@@ -68,7 +68,7 @@ CONFIG_DEVICE_xiaomi_mi-router-ax3000t-an8855=y
 |------|------|------|
 | `target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts` | **新建** | AN8855 设备树 — 定义单 UBI 分区布局 (112MB) |
 | `target/linux/mediatek/image/filogic.mk` | **修改** | 添加 `xiaomi_mi-router-ax3000t-an8855` 镜像构建目标 |
-| `target/linux/mediatek/filogic/base-files/etc/board.d/02_network` | **修改** | 新增 AN8855 的 VLAN 划分和 MAC 地址获取规则 |
+| `target/linux/mediatek/filogic/base-files/etc/board.d/02_network` | **修改** | 新增 AN8855 的 VLAN 划分、MAC 地址获取规则，默认 IP 设为 `192.168.31.1` |
 | `target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh` | **修改** | 添加 AN8855 的 mtdparts 初始化和系统升级入口 |
 | `target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults` | **修改** | 添加 AN8855 默认 WiFi 配置（首次启动自动开启） |
 
