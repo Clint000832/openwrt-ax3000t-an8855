@@ -76,6 +76,23 @@ index b7f8ffd..ece6794 100644
 +endef
 +TARGET_DEVICES += xiaomi_mi-router-ax3000t-an8855
 +
+diff --git a/target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults b/target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults
+index 4d4131e..ffc0c66 100644
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults
+@@ -9,6 +9,11 @@ openwrt,one)
+ 	ucidef_set_wireless_mac_count 2g 7
+ 	ucidef_set_wireless_mac_count 5g 7
+ 	;;
++xiaomi,mi-router-ax3000t-an8855)
++	ucidef_set_wireless "2g" "OpenWrt-AX3000T"
++	ucidef_set_wireless "5g" "OpenWrt-AX3000T-5G"
++	ucidef_set_country "CN"
++	;;
+ esac
+
+ board_config_flush
+
  define Device/xiaomi_mi-router-wr30u-stock
    DEVICE_VENDOR := Xiaomi
    DEVICE_MODEL := Mi Router WR30U (stock layout)
