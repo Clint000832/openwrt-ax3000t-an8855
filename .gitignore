@@ -1,6 +1,11 @@
 # 忽略 OpenWrt 构建目录
+openwrt-ax3000t/
 openwrt-build-*
 openwrt_compile_database/
+
+# 忽略日志
+build.log
+*.log
 
 # 忽略大文件追踪（固件仅保留参考）
 *.bin
