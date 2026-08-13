@@ -1,8 +1,13 @@
 # Xiaomi Mi Router AX3000T (AN8855) OpenWrt 编译实战总结
 
-> **项目背景：** 为 Xiaomi Mi Router AX3000T（外挂 Airoha AN8855 交换芯片版本）从源码编译 OpenWrt 24.10 固件。
+> **现状提醒(更新于 2026-08):** 本文是早期 24.10 + 自定义 AN8855/fwx 补丁的踩坑记录。
+> 当前仓库已切换到 **OpenWrt 主线 (main, ≈内核 6.18)**:**AN8855 支持已原生进入主线**,
+> 不再需要自定义 DTS / kernel 补丁。固件目标用共用的 stock 布局 `xiaomi_mi-router-ax3000t`。
+> 下面记录的 **WSL PATH、fakeroot 死锁、代理加速、断点续编** 等问题对主线编译同样适用,
+> 仅"核心改动"与"内核 patch"相关章节不再适用(主线已不需要)。
 >
-> **时间：** 2026-06 ｜ **平台：** WSL2 (Ubuntu) ｜ **目标：** mediatek_filogic (MT7981)
+> **原始背景:** 为 AX3000T (外挂 AN8855) 从源码编译 OpenWrt 24.10 固件。
+> **时间:** 2026-06 ｜ **平台:** WSL2 (Ubuntu) ｜ **目标:** mediatek_filogic (MT7981)
 
 ---
 
