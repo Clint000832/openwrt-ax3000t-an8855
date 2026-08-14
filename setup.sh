@@ -12,13 +12,13 @@
 #     官方 stock 双分区目标 (xiaomi_mi-router-ax3000t) 在本机会落回恢复页,
 #     勿用。详见 ROUTER_STATE.md §0。
 #   * 无自定义 fwx 内核补丁,保持纯净主线。
-#   * 额外集成 OpenClash (luci-app-openclash) 官方 feed。
-#   * ⚠️ OpenClash 是 Lua 应用,但主线 LuCI 26 已移除 Lua 运行时,
-#     必须同时选中 luci-compat (及其依赖 luci-lua-runtime),否则
-#     OpenClash 菜单不会出现。本脚本已自动加 CONFIG_PACKAGE_luci-compat=y。
-#   * 内核模块只能编译期打入(无法 apk 安装),因此本脚本预置了完整工具集:
-#     iptables 双栈 + 全 netfilter、隧道/vxlan/wireguard、QoS/tc、文件系统、
-#     USB 存储/串口/4G 网卡、zram 内存压缩、tcpdump/conntrack/ipset 等诊断工具。
+#   * OpenClash (luci-app-openclash) 以独立 apk 提供,不进固件(避免 initramfs
+#     超过原厂 U-Boot 加载体积上限);装时 apk add 并自动拉 luci-compat 等依赖。
+#   * 内核模块只能编译期打入(无法 apk 安装),本脚本预置了**精简工具集**:
+#     zram、iptables+nftables 双栈 + 核心 netfilter、wireguard/veth/tun 隧道、
+#     QoS(cake/fq-pie)、ext4、tcpdump/conntrack/ipset/tc-full 等诊断工具。
+#     原"完整工具集"含 179 个 kmod,使 initramfs-FIT 达 27.9MB,超过原厂 U-Boot
+#     加载上限(26MB 可启动)导致反复 panic/复位,已精简以适配。
 #
 # 用法:
 #   1) bash setup.sh          # 只做克隆 + feeds + 配置
@@ -222,244 +222,70 @@ CONFIG_PACKAGE_luci-app-nlbwmon=y
 CONFIG_PACKAGE_tailscale=y
 CONFIG_PACKAGE_luci-app-tailscale-community=y
 
-# ================= 完整工具集(去"精简"化) =================
-# --- zram:内存压缩(zram-swap 依赖 kmod-zram + BusyBox swap 工具) ---
-# 注意:BusyBox swap 工具(mkswap/swapon/swapoff)在默认配置下已开启
-# (BUSYBOX_DEFAULT_*SWAP*=y),无需 BUSYBOX_CUSTOM,故不额外写入。
+
+# ================= 工具集(精简版,控制体积以适配原厂 U-Boot) =================
+# 背景:5a26684 一次性加了 179 个 kmod,initramfs-FIT 撑到 27.9MB,超过原厂
+# U-Boot 加载上限(26MB 可启动,27.9MB 起不来,内核反复 panic/复位)。故只保留
+# 核心常用模块,去掉重文件系统(btrfs/xfs/ntfs3 等)、USB 驱动、异类隧道/协议、
+# 多余 sched 变体与启动高危项(mtdoops/softdog/phylink/of-mdio/fixed-phy),
+# 使 initramfs 回到 26MB 以内。更多功能在 make menuconfig 按需勾选,或单独
+# 编译为 apk 再装。
+# --- zram:内存压缩 ---
 CONFIG_PACKAGE_kmod-zram=y
 CONFIG_PACKAGE_zram-swap=y
 
-# --- 防火墙:iptables + nftables 双栈 ---
-# main 默认 fw4 走 nftables,但保留 iptables 命令族与内核模块,
-# 兼容依赖 iptables 的脚本/应用(如 OpenClash 兼容模式、传统教程)。
+# --- 防火墙:iptables + nftables 双栈(fw4 默认 nftables) ---
 CONFIG_PACKAGE_iptables=y
 CONFIG_PACKAGE_iptables-nft=y
 CONFIG_PACKAGE_ip6tables-nft=y
 CONFIG_PACKAGE_xtables-legacy=y
 CONFIG_PACKAGE_xtables-nft=y
-CONFIG_PACKAGE_iptables-mod-extra=y
-CONFIG_PACKAGE_iptables-mod-conntrack-extra=y
-CONFIG_PACKAGE_iptables-mod-ipopt=y
-CONFIG_PACKAGE_iptables-mod-iprange=y
-CONFIG_PACKAGE_iptables-mod-filter=y
-CONFIG_PACKAGE_iptables-mod-hashlimit=y
-CONFIG_PACKAGE_iptables-mod-nat-extra=y
-CONFIG_PACKAGE_iptables-mod-trace=y
-CONFIG_PACKAGE_iptables-mod-u32=y
-CONFIG_PACKAGE_iptables-mod-ipset=y
 
-# --- iptables/netfilter 内核模块(全) ---
+# --- nftables/iptables 内核模块(核心,OpenClash 兼容/Tailscale 常用) ---
 CONFIG_PACKAGE_kmod-ipt-core=y
-CONFIG_PACKAGE_kmod-ipt-extra=y
 CONFIG_PACKAGE_kmod-ipt-nat=y
-CONFIG_PACKAGE_kmod-ipt-nat-extra=y
 CONFIG_PACKAGE_kmod-ipt-nat6=y
 CONFIG_PACKAGE_kmod-ipt-conntrack=y
-CONFIG_PACKAGE_kmod-ipt-conntrack-extra=y
-CONFIG_PACKAGE_kmod-ipt-conntrack-label=y
-CONFIG_PACKAGE_kmod-ipt-ipopt=y
-CONFIG_PACKAGE_kmod-ipt-iprange=y
-CONFIG_PACKAGE_kmod-ipt-filter=y
-CONFIG_PACKAGE_kmod-ipt-hashlimit=y
 CONFIG_PACKAGE_kmod-ipt-ipset=y
 CONFIG_PACKAGE_kmod-ipt-offload=y
-CONFIG_PACKAGE_kmod-ipt-raw=y
-CONFIG_PACKAGE_kmod-ipt-raw6=y
-CONFIG_PACKAGE_kmod-ipt-u32=y
-CONFIG_PACKAGE_kmod-ipt-physdev=y
-CONFIG_PACKAGE_kmod-ipt-rpfilter=y
-CONFIG_PACKAGE_kmod-ipt-socket=y
-CONFIG_PACKAGE_kmod-ipt-tee=y
-CONFIG_PACKAGE_kmod-ipt-tproxy=y
-CONFIG_PACKAGE_kmod-ipt-checksum=y
-CONFIG_PACKAGE_kmod-ipt-led=y
-CONFIG_PACKAGE_kmod-ipt-nflog=y
-CONFIG_PACKAGE_kmod-ipt-nfqueue=y
-CONFIG_PACKAGE_kmod-ipt-cluster=y
-CONFIG_PACKAGE_kmod-ipt-ipsec=y
-CONFIG_PACKAGE_kmod-ipt-debug=y
-
-# --- nftables 扩展内核模块(fw4 下被 ipset/nat/bridge 等引用) ---
 CONFIG_PACKAGE_kmod-nft-bridge=y
 CONFIG_PACKAGE_kmod-nft-compat=y
-CONFIG_PACKAGE_kmod-nft-connlimit=y
-CONFIG_PACKAGE_kmod-nft-queue=y
-CONFIG_PACKAGE_kmod-nft-socket=y
-CONFIG_PACKAGE_kmod-nft-dup-inet=y
 CONFIG_PACKAGE_kmod-nft-netdev=y
-CONFIG_PACKAGE_kmod-nft-xfrm=y
-CONFIG_PACKAGE_kmod-nft-arp=y
-
-# --- nf 核心与 NAT 助手 ---
-CONFIG_PACKAGE_kmod-nf-nat6=y
 CONFIG_PACKAGE_kmod-nf-ipt=y
 CONFIG_PACKAGE_kmod-nf-ipt6=y
-CONFIG_PACKAGE_kmod-nf-ipvs=y
-CONFIG_PACKAGE_kmod-nf-ipvs-ftp=y
-CONFIG_PACKAGE_kmod-nf-ipvs-sip=y
 CONFIG_PACKAGE_kmod-nf-nathelper=y
-CONFIG_PACKAGE_kmod-nf-nathelper-amanda=y
-CONFIG_PACKAGE_kmod-nf-nathelper-broadcast=y
 CONFIG_PACKAGE_kmod-nf-nathelper-extra=y
-CONFIG_PACKAGE_kmod-nf-nathelper-h323=y
-CONFIG_PACKAGE_kmod-nf-nathelper-irc=y
-CONFIG_PACKAGE_kmod-nf-nathelper-netbios=y
 CONFIG_PACKAGE_kmod-nf-nathelper-pptp=y
-CONFIG_PACKAGE_kmod-nf-nathelper-sane=y
-CONFIG_PACKAGE_kmod-nf-nathelper-sip=y
-CONFIG_PACKAGE_kmod-nf-nathelper-snmp=y
 CONFIG_PACKAGE_kmod-nf-nathelper-tftp=y
 CONFIG_PACKAGE_kmod-nf-conncount=y
-CONFIG_PACKAGE_kmod-nf-socket=y
-CONFIG_PACKAGE_kmod-nf-dup-inet=y
-CONFIG_PACKAGE_kmod-nfnetlink-cthelper=y
-CONFIG_PACKAGE_kmod-nfnetlink-cttimeout=y
-CONFIG_PACKAGE_kmod-nfnetlink-log=y
-CONFIG_PACKAGE_kmod-nfnetlink-queue=y
 
-# --- 隧道 / 虚拟网卡 / 协议 ---
-CONFIG_PACKAGE_kmod-gre=y
-CONFIG_PACKAGE_kmod-gre6=y
-CONFIG_PACKAGE_kmod-ipip=y
-CONFIG_PACKAGE_kmod-sit=y
-CONFIG_PACKAGE_kmod-ip6-tunnel=y
-CONFIG_PACKAGE_kmod-ip-vti=y
-CONFIG_PACKAGE_kmod-ip6-vti=y
-CONFIG_PACKAGE_kmod-iptunnel4=y
-CONFIG_PACKAGE_kmod-iptunnel6=y
-CONFIG_PACKAGE_kmod-vxlan=y
-CONFIG_PACKAGE_kmod-geneve=y
-CONFIG_PACKAGE_kmod-fou=y
-CONFIG_PACKAGE_kmod-fou6=y
-CONFIG_PACKAGE_kmod-udptunnel4=y
-CONFIG_PACKAGE_kmod-udptunnel6=y
+# --- 隧道/虚拟网卡(常用) ---
 CONFIG_PACKAGE_kmod-wireguard=y
 CONFIG_PACKAGE_kmod-veth=y
-CONFIG_PACKAGE_kmod-l2tp=y
-CONFIG_PACKAGE_kmod-l2tp-eth=y
-CONFIG_PACKAGE_kmod-l2tp-ip=y
-CONFIG_PACKAGE_kmod-pppol2tp=y
-CONFIG_PACKAGE_kmod-ppp-synctty=y
-CONFIG_PACKAGE_kmod-bonding=y
-CONFIG_PACKAGE_kmod-team=y
-CONFIG_PACKAGE_kmod-team-mode-activebackup=y
-CONFIG_PACKAGE_kmod-team-mode-broadcast=y
-CONFIG_PACKAGE_kmod-team-mode-loadbalance=y
-CONFIG_PACKAGE_kmod-team-mode-random=y
-CONFIG_PACKAGE_kmod-team-mode-roundrobin=y
-CONFIG_PACKAGE_kmod-macsec=y
-CONFIG_PACKAGE_kmod-mpls=y
-CONFIG_PACKAGE_kmod-vrf=y
-CONFIG_PACKAGE_kmod-sctp=y
+CONFIG_PACKAGE_kmod-tun=y
 CONFIG_PACKAGE_kmod-tcp-bbr=y
-CONFIG_PACKAGE_kmod-tcp-hybla=y
-CONFIG_PACKAGE_kmod-tcp-scalable=y
-CONFIG_PACKAGE_kmod-netem=y
-CONFIG_PACKAGE_kmod-ipsec=y
-CONFIG_PACKAGE_kmod-ipsec4=y
-CONFIG_PACKAGE_kmod-ipsec6=y
-CONFIG_PACKAGE_kmod-xfrm-interface=y
 
-# --- QoS / tc 调度器 ---
+# --- QoS / tc(保留 cake/fq-pie,其余按需) ---
 CONFIG_PACKAGE_kmod-sched-core=y
 CONFIG_PACKAGE_kmod-sched-cake=y
 CONFIG_PACKAGE_kmod-sched-fq-pie=y
-CONFIG_PACKAGE_kmod-sched-skbprio=y
-CONFIG_PACKAGE_kmod-sched-flower=y
-CONFIG_PACKAGE_kmod-sched-bpf=y
-CONFIG_PACKAGE_kmod-sched-pie=y
-CONFIG_PACKAGE_kmod-sched-red=y
-CONFIG_PACKAGE_kmod-sched-prio=y
-CONFIG_PACKAGE_kmod-sched-drr=y
-CONFIG_PACKAGE_kmod-sched-mqprio=y
-CONFIG_PACKAGE_kmod-sched-mqprio-common=y
-CONFIG_PACKAGE_kmod-sched-ctinfo=y
-CONFIG_PACKAGE_kmod-sched-connmark=y
-CONFIG_PACKAGE_kmod-sched-ipset=y
-CONFIG_PACKAGE_kmod-sched-act-vlan=y
-CONFIG_PACKAGE_kmod-sched-act-police=y
-CONFIG_PACKAGE_kmod-sched-act-sample=y
 
-# --- 文件系统(USB 移动盘/存储) ---
+# --- 文件系统(仅保留 ext4,重文件系统已剔除以控制体积) ---
 CONFIG_PACKAGE_kmod-fs-ext4=y
-CONFIG_PACKAGE_kmod-fs-f2fs=y
-CONFIG_PACKAGE_kmod-fs-exfat=y
-CONFIG_PACKAGE_kmod-fs-vfat=y
-CONFIG_PACKAGE_kmod-fs-msdos=y
-CONFIG_PACKAGE_kmod-fs-ntfs3=y
-CONFIG_PACKAGE_kmod-fs-isofs=y
-CONFIG_PACKAGE_kmod-fs-hfsplus=y
-CONFIG_PACKAGE_kmod-fs-udf=y
-CONFIG_PACKAGE_kmod-fs-configfs=y
-CONFIG_PACKAGE_kmod-fs-exportfs=y
-CONFIG_PACKAGE_kmod-fs-btrfs=y
-CONFIG_PACKAGE_kmod-fs-xfs=y
 
-# --- USB 存储 / 串口 / 网卡(4G) ---
-CONFIG_PACKAGE_kmod-usb-storage=y
-CONFIG_PACKAGE_kmod-usb-storage-uas=y
-CONFIG_PACKAGE_kmod-usb-storage-extras=y
-CONFIG_PACKAGE_kmod-usb-printer=y
-CONFIG_PACKAGE_kmod-usb-serial=y
-CONFIG_PACKAGE_kmod-usb-serial-ch341=y
-CONFIG_PACKAGE_kmod-usb-serial-ftdi=y
-CONFIG_PACKAGE_kmod-usb-serial-cp210x=y
-CONFIG_PACKAGE_kmod-usb-serial-pl2303=y
-CONFIG_PACKAGE_kmod-usb-serial-option=y
-CONFIG_PACKAGE_kmod-usb-serial-wwan=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-eem=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-ncm=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-subset=y
-CONFIG_PACKAGE_kmod-usb-net-huawei-cdc-ncm=y
-CONFIG_PACKAGE_kmod-usb-gadget=y
-CONFIG_PACKAGE_kmod-usb-gadget-eth=y
-CONFIG_PACKAGE_kmod-usb-gadget-serial=y
-CONFIG_PACKAGE_kmod-usb-gadget-mass-storage=y
-
-# --- 字符集 (FAT/文件系统中文名支持) ---
-CONFIG_PACKAGE_kmod-nls-cp437=y
-CONFIG_PACKAGE_kmod-nls-cp850=y
-CONFIG_PACKAGE_kmod-nls-cp852=y
-CONFIG_PACKAGE_kmod-nls-cp866=y
-CONFIG_PACKAGE_kmod-nls-cp932=y
-CONFIG_PACKAGE_kmod-nls-cp936=y
-CONFIG_PACKAGE_kmod-nls-cp950=y
-CONFIG_PACKAGE_kmod-nls-iso8859-1=y
-CONFIG_PACKAGE_kmod-nls-iso8859-15=y
-CONFIG_PACKAGE_kmod-nls-utf8=y
-CONFIG_PACKAGE_kmod-nls-ucs2-utils=y
-
-# --- 杂项内核 ---
-CONFIG_PACKAGE_kmod-softdog=y
-CONFIG_PACKAGE_kmod-mtdoops=y
-CONFIG_PACKAGE_kmod-fixed-phy=y
-CONFIG_PACKAGE_kmod-phylink=y
-CONFIG_PACKAGE_kmod-of-mdio=y
-CONFIG_PACKAGE_kmod-input-evdev=y
-CONFIG_PACKAGE_kmod-input-gpio-keys=y
-CONFIG_PACKAGE_kmod-input-gpio-keys-polled=y
-CONFIG_PACKAGE_kmod-input-uinput=y
-CONFIG_PACKAGE_kmod-leds-pwm=y
-CONFIG_PACKAGE_kmod-leds-uleds=y
-
-# --- 连接跟踪工具 ---
+# --- 连接跟踪 / IP 集 / 路由 / 流量工具 ---
 CONFIG_PACKAGE_conntrack=y
-CONFIG_PACKAGE_conntrackd=y
-
-# --- IP 集与路由工具 ---
 CONFIG_PACKAGE_ipset=y
-CONFIG_PACKAGE_ip-full=y            # 完整 ip 命令(替代 ip-tiny)
-CONFIG_PACKAGE_tc-full=y            # 完整 tc 流量控制
+CONFIG_PACKAGE_ip-full=y
 CONFIG_PACKAGE_ip-bridge=y
+CONFIG_PACKAGE_tc-full=y
 
 # --- 网络诊断/抓包 ---
 CONFIG_PACKAGE_tcpdump=y
 CONFIG_PACKAGE_iperf3=y
 CONFIG_PACKAGE_ethtool=y
-CONFIG_PACKAGE_mtr-json=y          # mtr 仅提供 mtr-json / mtr-nojson 两个 variant
-CONFIG_PACKAGE_nlbwmon=y            # 带宽统计守护进程
+CONFIG_PACKAGE_mtr-json=y
+CONFIG_PACKAGE_nlbwmon=y
 
 # --- 基础实用工具 ---
 CONFIG_PACKAGE_curl=y
@@ -478,8 +304,8 @@ echo "  已自动选中:"
 echo "    Target Profile -> Xiaomi Mi Router AX3000T (AN8855, 单 UBI, 原厂 U-Boot)"
 echo "    LuCI (+ SSL,中文)"
 echo "    OpenClash 仅单独编译为 apk(不进固件) / Tailscale + luci-app-tailscale-community"
-echo "    zram 内存压缩 / iptables+nftables 双栈 / 完整 netfilter+隧道+QoS kmod"
-echo "    tcpdump / conntrack / ipset / tc-full / 文件系统 / USB 存储 / 诊断工具"
+echo "    zram 内存压缩 / iptables+nftables 双栈 / 核心 netfilter / wireguard 隧道 / QoS(cake/fq-pie)"
+echo "    tcpdump / conntrack / ipset / tc-full / ext4 / 诊断工具 (精简版,适配原厂 U-Boot 体积上限)"
 echo ""
 echo "  如需调整运行: make menuconfig"
 

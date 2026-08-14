@@ -7,7 +7,7 @@
 > - ⚠️ **2026-08-14 实测修正:** 主线 stock 目标 `xiaomi_mi-router-ax3000t`(**双分区** ubi_kernel+ubi)在**原厂 U-Boot + AN8855** 上 sysupgrade 后无法持久启动(实测两次落回原厂恢复页)。已在 main 上重建 **单 UBI 目标 `xiaomi_mi-router-ax3000t-an8855`**(与旧 24.10 官方 an8855 布局一致:单 `ubi` 112MB @0x600000),用该目标编译/刷机。
 > - 去掉自定义 **fwx 内核补丁** 和 **FanchmWrt 主题**,保持纯净主线。
 > - 增加 **OpenClash** 作为额外 feed。
-> - 🧰 **内置完整工具集**:iptables+nftables 双栈、zram 内存压缩、完整 netfilter/隧道/vxlan/wireguard、QoS/tc、文件系统、USB 存储、tcpdump/conntrack/ipset 等诊断工具(内核模块只能编译期打入,已全部预置)。
+> - 🧰 **内置精简工具集**:iptables+nftables 双栈、zram 内存压缩、核心 netfilter、wireguard 隧道、QoS(tc/cake/fq-pie)、ext4、tcpdump/ipset/tc-full 等诊断工具(内核模块只能编译期打入,已预置;重文件系统/USB 等已剔除以适配原厂 U-Boot 体积上限)。
 > - 📡 **软件源(apk)默认换为中科大 USTC 镜像**,国内下载快。
 > - 📌 本机分区/UBI/固件状态见 [`ROUTER_STATE.md`](ROUTER_STATE.md)。
 
@@ -103,7 +103,7 @@ bash setup.sh build
 2. 在 `feeds.conf` 追加 OpenClash feed;
 3. **应用 `patches/` 里的 an8855 单 UBI 目标补丁**(filogic.mk / platform.sh / 02_network / DTS,已应用则跳过);
 4. `./scripts/feeds update -a && install -a`;
-5. `make defconfig` 生成默认配置(已含 an8855 目标、Tailscale、**完整工具集**;**不含 OpenClash**,单独编译为 apk);
+5. `make defconfig` 生成默认配置(已含 an8855 目标、Tailscale、**精简工具集**;**不含 OpenClash**,单独编译为 apk);
 6. 写入 **USTC apk 镜像**(`CONFIG_VERSIONOPT=y` + `CONFIG_VERSION_REPO`)。
 
 ### menuconfig 必查项
@@ -128,13 +128,18 @@ bash setup.sh build
 > `apk add luci-app-openclash`(会自动拉 `luci-compat`/`luci-lua-runtime`/dnsmasq-full/
 > bash/curl/ipset/ruby 等依赖)。
 
-> **内核相关包只能编译期打入(apk 无法安装),`setup.sh` 已全量预置**,包括:
+> **内核相关包只能编译期打入(apk 无法安装),`setup.sh` 已预置精简工具集**,包括:
 > - zram 内存压缩(`kmod-zram` + `zram-swap`)
-> - iptables + nftables 双栈及完整 netfilter kmod(`kmod-ipt-*` / `kmod-nft-*` / `kmod-nf-*`)
-> - 隧道/虚拟网卡/协议:gre/ipip/sit/vxlan/geneve/fou/wireguard/l2tp/pppol2tp/bonding/team/macsec/vrf/sctp/tcp-bbr 等
-> - QoS/tc:`kmod-sched-*`(cake/fq-pie/flower/bpf 等)
-> - 文件系统:ext4/f2fs/exfat/vfat/ntfs3/btrfs/xfs 等;USB 存储/串口/4G 网卡驱动
-> - 诊断工具:tcpdump / conntrack / conntrackd / ipset / ip-full / tc-full / iperf3 / ethtool / mtr / nlbwmon 等
+> - iptables + nftables 双栈及核心 netfilter kmod(`kmod-ipt-core`/`kmod-nft-*`/`kmod-nf-nathelper` 等)
+> - 隧道/虚拟网卡:wireguard / veth / tun / tcp-bbr
+> - QoS/tc:`kmod-sched-cake` / `kmod-sched-fq-pie` + `tc-full`
+> - 文件系统:ext4
+> - 诊断工具:tcpdump / conntrack / ipset / ip-full / ip-bridge / iperf3 / ethtool / mtr / nlbwmon 等
+>
+> > ⚠️ **为何精简:** 初版一次性加了 179 个 kmod(重文件系统 btrfs/xfs、USB 驱动、
+> > 异类隧道/l2tp/team/macsec 等),使 initramfs-FIT 达 27.9MB,超过原厂 U-Boot
+> > 加载体积上限(26MB 可启动)导致内核反复 panic/复位。已裁到 26MB 以内。需要更多
+> > 功能时 `make menuconfig` 按需勾选,或单独编译为 apk 再装。
 
 > ⚠️ **OpenClash 若需安装,必须带 `luci-compat`:** 主线 LuCI 26 已彻底移除 Lua 运行时,
 > 而 OpenClash 是纯 Lua 应用。`apk add luci-app-openclash` 会自动拉入
@@ -197,8 +202,8 @@ ls -lh bin/targets/mediatek/filogic/
 - `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-initramfs-factory.ubi` — **首次刷入**(从原厂系统/原厂 U-Boot 启动 OpenWrt 内存版)
 - `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-squashfs-sysupgrade.bin` — **升级**(在线 sysupgrade)
 
-> 体积较大(initramfs / sysupgrade 约 25–30MB)正常:内含 LuCI + Tailscale +
-> 完整内核模块工具集。闪存为单 UBI 112MB,空间充足。
+> 体积适中(initramfs-kernel 约 25MB / sysupgrade 约 27MB):内含 LuCI + Tailscale +
+> 精简工具集(已裁到原厂 U-Boot 加载上限内)。闪存为单 UBI 112MB,空间充足。
 > **OpenClash 已从固件剔除**(单独 apk,避免 initramfs 超原厂 U-Boot 加载上限)。
 
 ### 刷入方法
