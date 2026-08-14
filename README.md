@@ -4,9 +4,10 @@
 
 > **更新要点(相对旧版):**
 > - OpenWrt 主线 (内核 ≈6.18) **已原生支持 AN8855 交换芯片**,DTS/驱动都在主线里,不再需要任何 target 源码补丁。
-> - 固件目标与原 AX3000T (MT7531) **共用 stock 布局 `xiaomi_mi-router-ax3000t`**,从原厂 U-Boot 用 `initramfs-factory.ubi` 启动后再 `sysupgrade` 即可。
+> - ⚠️ **2026-08-14 实测修正:** 主线 stock 目标 `xiaomi_mi-router-ax3000t`(**双分区** ubi_kernel+ubi)在**原厂 U-Boot + AN8855** 上 sysupgrade 后无法持久启动(实测两次落回原厂恢复页)。已在 main 上重建 **单 UBI 目标 `xiaomi_mi-router-ax3000t-an8855`**(与旧 24.10 官方 an8855 布局一致:单 `ubi` 112MB @0x600000),用该目标编译/刷机。
 > - 去掉自定义 **fwx 内核补丁** 和 **FanchmWrt 主题**,保持纯净主线。
 > - 增加 **OpenClash** 作为额外 feed。
+> - 📌 本机分区/UBI/固件状态见 [`ROUTER_STATE.md`](ROUTER_STATE.md)。
 
 ---
 
@@ -16,7 +17,7 @@
 2. [环境准备](#2-环境准备)
 3. [一键构建](#3-一键构建)
 4. [手动步骤(可选)](#4-手动步骤可选)
-5. [刷入路由器](#5-刷入路由器)
+5. [刷入路由器](#5-刷入路由器)(本机路径见 `ROUTER_STATE.md`)
 6. [常见问题](#6-常见问题)
 
 ---
@@ -36,9 +37,12 @@
 
 ### 主线对 AN8855 的支持方式
 
-主线 `target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-common.dtsi` 同时声明了 **MT7531** 与 **AN8855** 两个交换节点。内核启动时通过 MDIO 探测,只有实际存在的芯片会成功注册为 DSA switch,因此同一份 `xiaomi_mi-router-ax3000t` 固件在两种硬件版本上都能工作。U-Boot 侧也已有"auto switch chip detect"。
+主线 `target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-common.dtsi` 同时声明了 **MT7531** 与 **AN8855** 两个交换节点。内核启动时通过 MDIO 探测,只有实际存在的芯片会成功注册为 DSA switch,因此**驱动/网络层面**两份固件通用。⚠️ 但**启动布局必须区分硬件**:
+- **AN8855(外挂交换,本机)+ 原厂 U-Boot** → 用 `xiaomi_mi-router-ax3000t-an8855`(**单 UBI**,本仓库重建的目标)。
+- MT7531 版 → 官方 `xiaomi_mi-router-ax3000t`(双分区)。
+- 刷过 OpenWrt U-Boot → `xiaomi_mi-router-ax3000t-ubootmod`。
 
-> 如果你刷过 OpenWrt 的 U-Boot 想用单 UBI 布局,可改用 `xiaomi_mi-router-ax3000t-ubootmod` 目标(`make menuconfig` 里切换)。
+> 实测(2026-08-14):AN8855 + 原厂 U-Boot 用 stock 双分区目标 sysupgrade 后无法持久启动,详见 `ROUTER_STATE.md` §0。
 
 ---
 
@@ -95,8 +99,9 @@ bash setup.sh build
 `setup.sh` 会自动:
 1. 浅克隆 OpenWrt `main` 分支到 `openwrt-ax3000t/`;
 2. 在 `feeds.conf` 追加 OpenClash feed;
-3. `./scripts/feeds update -a && install -a`;
-4. `make defconfig` 生成默认配置。
+3. **应用 `patches/` 里的 an8855 单 UBI 目标补丁**(filogic.mk / platform.sh / 02_network / DTS,已应用则跳过);
+4. `./scripts/feeds update -a && install -a`;
+5. `make defconfig` 生成默认配置(已含 an8855 目标、`luci-compat`、OpenClash、Tailscale)。
 
 ### menuconfig 必查项
 
@@ -104,12 +109,18 @@ bash setup.sh build
 |------|------|
 | Target System | `MediaTek Ralink ARM` |
 | Subtarget | `Filogic 820/830 (MT7981/MT7986)` |
-| Target Profile | `Xiaomi Mi Router AX3000T` |
+| Target Profile | `Xiaomi Mi Router AX3000T (AN8855)`(单 UBI,新目标;勿选带 `(OpenWrt U-Boot layout)` 的 ubootmod)|
 | LuCI → Collections | `luci`(`luci-ssl` 更佳) |
+| LuCI → Libraries | `luci-compat`(及其依赖 `luci-lua-runtime`,**OpenClash 必需**) |
 | LuCI → Applications | `luci-app-openclash`、`luci-app-tailscale-community` |
 | LuCI → Translations | 中文(由 `LUCI_LANG_zh_Hans` 总开关控制,setup.sh 已预置) |
 
 > OpenClash 依赖(dnsmasq-full / bash / curl / ipset / ruby 等)与 Tailscale 依赖(`kmod-tun`)会被自动拉入。
+
+> ⚠️ **OpenClash 必须带 `luci-compat`:** 主线 LuCI 26 已彻底移除 Lua 运行时,
+> 而 OpenClash 是纯 Lua 应用。若不选 `luci-compat`(会自动带上 `luci-lua-runtime`),
+> 固件里虽有 OpenClash 文件,但 `服务 > OpenClash` 菜单**不会出现**。
+> `setup.sh` 已自动加 `CONFIG_PACKAGE_luci-compat=y` + `CONFIG_PACKAGE_luci-lua-runtime=y`。
 
 ---
 
@@ -132,9 +143,13 @@ EOF
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
+# 应用 an8855 单 UBI 目标补丁(关键,见 ROUTER_STATE.md §0)
+cp ../patches/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts target/linux/mediatek/dts/
+patch -p1 --forward -i ../patches/0001-add-an8855-target.patch
+
 # 配置 + 编译
 make defconfig
-make menuconfig
+make menuconfig   # 务必选 an8855 目标 + luci-compat + luci-app-openclash
 make -j$(nproc) V=s 2>&1 | tee build.log
 ```
 
@@ -142,23 +157,54 @@ make -j$(nproc) V=s 2>&1 | tee build.log
 
 ## 5. 刷入路由器
 
+> ⚠️ **刷机前必读:** 本机兼容的刷机方式与你的**当前布局**强相关。
+> 实机抓取的分区/UBI 卷/固件状态见 [`ROUTER_STATE.md`](ROUTER_STATE.md)(记录于 2026-08-13/14)。
+>
+> **关键结论(本机,原厂 U-Boot + AN8855):必须用单 UBI 目标
+> `xiaomi_mi-router-ax3000t-an8855` 编译;stock 双分区目标 sysupgrade 后无法持久启动。**
+> 详见 `ROUTER_STATE.md` §0。
+
 ### 编译产物
 
 ```bash
 ls -lh bin/targets/mediatek/filogic/
 ```
 
-关键文件:
-- `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-initramfs-factory.ubi` — **首次刷入**(从原厂系统/原厂 U-Boot 启动 OpenWrt 内存版)
-- `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-squashfs-sysupgrade.bin` — **升级**(在线 sysupgrade)
+关键文件(an8855 目标):
+- `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-initramfs-factory.ubi` — **首次刷入**(从原厂系统/原厂 U-Boot 启动 OpenWrt 内存版)
+- `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-squashfs-sysupgrade.bin` — **升级**(在线 sysupgrade)
+
+> 体积较大(initramfs 27MB / sysupgrade 28MB)正常:内含 LuCI + OpenClash + Tailscale。
 
 ### 刷入方法
 
-#### A. 首次:用 XMiR-Patcher / 原厂 U-Boot 引导 initramfs
+#### A. 本机推荐流程:initramfs 过渡 → sysupgrade
 
-1. 原厂系统下,用 [XMiR-Patcher](https://github.com/openwrt-xiaomi/xmir-patcher) 把 `initramfs-factory.ubi` 刷到 ubi 分区,或
-2. 进原厂 U-Boot 恢复模式(断电按住 Reset → 上电 → LED 闪烁后松开),电脑设静态 IP 后访问恢复页面刷入。
-3. 内存版 OpenWrt 启动后,**LAN IP 默认为 `192.168.31.1`**(Xiaomi 习惯,由 setup.sh 注入的 uci-defaults 设置);WiFi 已默认开启(SSID: `OpenWrt-AX3000T` / `OpenWrt-AX3000T-5G`,无加密,方便无网线连接)。浏览器访问 `192.168.31.1` 进入 LuCI。
+> 适配本机(原厂 U-Boot + AN8855,单 UBI 112MB)。仅适用已运行 OpenWrt 的现状。
+
+**① 刷入 initramfs 内存版(会覆盖当前系统,先备份配置):**
+
+```bash
+scp openwrt-*-an8855-initramfs-factory.ubi root@192.168.31.1:/tmp/
+ssh root@192.168.31.1
+mtd -f write /tmp/openwrt-*-an8855-initramfs-factory.ubi ubi
+reboot
+```
+
+重启进入主线内存系统:LAN IP `192.168.31.1`,WiFi `OpenWrt-AX3000T` / `OpenWrt-AX3000T-5G`(无加密)。
+
+**② 在内存系统里正式 sysupgrade:**
+
+```bash
+scp openwrt-*-an8855-squashfs-sysupgrade.bin root@192.168.31.1:/tmp/
+ssh root@192.168.31.1
+sysupgrade -n /tmp/openwrt-*-an8855-squashfs-sysupgrade.bin
+```
+
+该 sysupgrade 走单 UBI(`CI_UBIPART="ubi"`),kernel+rootfs+rootfs_data 全部写进同一个 `ubi`
+分区,与原厂 U-Boot 兼容,重启即进入持久系统。
+
+**救砖:** 断电 → 按住 Reset → 上电,进入原厂 U-Boot 恢复页 (192.168.31.1) 重刷。
 
 #### B. 后续升级:sysupgrade
 
@@ -180,6 +226,27 @@ ssh root@192.168.31.1 'sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin'
 ### Q: 编译时 OpenClash 包没有出现?
 
 确认 `feeds.conf` 里有 OpenClash feed,并执行过 `./scripts/feeds update -a && ./scripts/feeds install -a`,然后 `make menuconfig` → LuCI → Applications。
+
+### Q: 刷进去系统里看不到 OpenClash 菜单?
+
+`luci-app-openclash` 其实已装进固件(在 `usr/share/openclash/`、`/etc/init.d/openclash` 等都有文件),
+但**菜单不显示**,原因是:主线 **LuCI 26 移除了 Lua 运行时**,而 OpenClash 是纯 Lua 应用。
+
+- **正确修法(编译期,一次到位):** 在 `.config` 选中 `CONFIG_PACKAGE_luci-compat=y`
+  (连同 `luci-lua-runtime`),重新编译刷机。`setup.sh` 已自动加这两项。
+- **临时修法(运行期,不重刷):** 在路由器上手动安装 compat(见下)。
+
+**运行期手动安装 luci-compat(OpenWrt main 用 apk,旧版用 opkg):**
+```sh
+# 先更新软件源(需联网)
+apk update            # 或 opkg update
+apk add luci-compat   # 或 opkg install luci-compat
+/etc/init.d/uhttpd restart
+# 刷新 LuCI 页面,服务 > OpenClash 出现后再去 OpenClash 设置里下载核心
+```
+
+> 判断法:SSH 进路由器看 `/usr/lib/lua/luci/controller/openclash.lua` 是否存在于**当前系统**。
+> 若只有 `usr/share/` 没有 Lua 控制器可加载,即缺 compat。
 
 ### Q: 下载极慢/超时?
 
@@ -205,7 +272,14 @@ PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':') make package
 
 ### Q: 想换回 24.10 稳定分支?
 
-把 `setup.sh` 里的 `--branch main` 改成 `--branch openwrt-24.10`。24.10 同样内置了 AN8855 支持(自 2025-01 cherry-pick 起)。
+把 `setup.sh` 里的 `--branch main` 改成 `--branch openwrt-24.10`。24.10 **自带官方
+`xiaomi_mi-router-ax3000t-an8855` 单 UBI 目标**(无需自定义,即旧固件所用),同样内置 AN8855 支持。
+
+### Q: 为什么主线 stock 目标刷完 sysupgrade 起不来?
+
+AN8855 + 原厂 U-Boot 只认**单 UBI** 布局。主线 stock 目标是**双分区**(ubi_kernel+ubi),sysupgrade
+后重启落回原厂恢复页。已重签方案:在 main 上重建 `-an8855` 单 UBI 目标,用它的 initramfs/sysupgrade
+产物刷机。详见 `ROUTER_STATE.md` §0。
 
 ---
 
