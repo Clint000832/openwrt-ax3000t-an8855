@@ -7,6 +7,8 @@
 > - ⚠️ **2026-08-14 实测修正:** 主线 stock 目标 `xiaomi_mi-router-ax3000t`(**双分区** ubi_kernel+ubi)在**原厂 U-Boot + AN8855** 上 sysupgrade 后无法持久启动(实测两次落回原厂恢复页)。已在 main 上重建 **单 UBI 目标 `xiaomi_mi-router-ax3000t-an8855`**(与旧 24.10 官方 an8855 布局一致:单 `ubi` 112MB @0x600000),用该目标编译/刷机。
 > - 去掉自定义 **fwx 内核补丁** 和 **FanchmWrt 主题**,保持纯净主线。
 > - 增加 **OpenClash** 作为额外 feed。
+> - 🧰 **内置完整工具集**:iptables+nftables 双栈、zram 内存压缩、完整 netfilter/隧道/vxlan/wireguard、QoS/tc、文件系统、USB 存储、tcpdump/conntrack/ipset 等诊断工具(内核模块只能编译期打入,已全部预置)。
+> - 📡 **软件源(apk)默认换为中科大 USTC 镜像**,国内下载快。
 > - 📌 本机分区/UBI/固件状态见 [`ROUTER_STATE.md`](ROUTER_STATE.md)。
 
 ---
@@ -101,7 +103,8 @@ bash setup.sh build
 2. 在 `feeds.conf` 追加 OpenClash feed;
 3. **应用 `patches/` 里的 an8855 单 UBI 目标补丁**(filogic.mk / platform.sh / 02_network / DTS,已应用则跳过);
 4. `./scripts/feeds update -a && install -a`;
-5. `make defconfig` 生成默认配置(已含 an8855 目标、`luci-compat`、OpenClash、Tailscale)。
+5. `make defconfig` 生成默认配置(已含 an8855 目标、`luci-compat`、OpenClash、Tailscale、**完整工具集**);
+6. 写入 **USTC apk 镜像**(`CONFIG_VERSIONOPT=y` + `CONFIG_VERSION_REPO`)。
 
 ### menuconfig 必查项
 
@@ -112,15 +115,28 @@ bash setup.sh build
 | Target Profile | `Xiaomi Mi Router AX3000T (AN8855)`(单 UBI,新目标;勿选带 `(OpenWrt U-Boot layout)` 的 ubootmod)|
 | LuCI → Collections | `luci`(`luci-ssl` 更佳) |
 | LuCI → Libraries | `luci-compat`(及其依赖 `luci-lua-runtime`,**OpenClash 必需**) |
-| LuCI → Applications | `luci-app-openclash`、`luci-app-tailscale-community` |
+| LuCI → Applications | `luci-app-openclash`、`luci-app-tailscale-community`、`luci-app-nlbwmon` |
 | LuCI → Translations | 中文(由 `LUCI_LANG_zh_Hans` 总开关控制,setup.sh 已预置) |
+| Global build settings → Image configuration → Release repository | `https://mirrors.ustc.edu.cn/openwrt/snapshots`(USTC 镜像) |
 
 > OpenClash 依赖(dnsmasq-full / bash / curl / ipset / ruby 等)与 Tailscale 依赖(`kmod-tun`)会被自动拉入。
+
+> **内核相关包只能编译期打入(apk 无法安装),`setup.sh` 已全量预置**,包括:
+> - zram 内存压缩(`kmod-zram` + `zram-swap`)
+> - iptables + nftables 双栈及完整 netfilter kmod(`kmod-ipt-*` / `kmod-nft-*` / `kmod-nf-*`)
+> - 隧道/虚拟网卡/协议:gre/ipip/sit/vxlan/geneve/fou/wireguard/l2tp/pppol2tp/bonding/team/macsec/vrf/sctp/tcp-bbr 等
+> - QoS/tc:`kmod-sched-*`(cake/fq-pie/flower/bpf 等)
+> - 文件系统:ext4/f2fs/exfat/vfat/ntfs3/btrfs/xfs 等;USB 存储/串口/4G 网卡驱动
+> - 诊断工具:tcpdump / conntrack / conntrackd / ipset / ip-full / tc-full / iperf3 / ethtool / mtr / nlbwmon 等
 
 > ⚠️ **OpenClash 必须带 `luci-compat`:** 主线 LuCI 26 已彻底移除 Lua 运行时,
 > 而 OpenClash 是纯 Lua 应用。若不选 `luci-compat`(会自动带上 `luci-lua-runtime`),
 > 固件里虽有 OpenClash 文件,但 `服务 > OpenClash` 菜单**不会出现**。
 > `setup.sh` 已自动加 `CONFIG_PACKAGE_luci-compat=y` + `CONFIG_PACKAGE_luci-lua-runtime=y`。
+
+> ⚠️ **USTC 镜像需同时开启 `VERSIONOPT`:** `VERSION_REPO` 等符号挂在
+> `Global build settings → Image configuration` 菜单下,须 `CONFIG_VERSIONOPT=y` 才会写入
+> `.config`。`setup.sh` 已自动处理。
 
 ---
 
@@ -174,7 +190,8 @@ ls -lh bin/targets/mediatek/filogic/
 - `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-initramfs-factory.ubi` — **首次刷入**(从原厂系统/原厂 U-Boot 启动 OpenWrt 内存版)
 - `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-squashfs-sysupgrade.bin` — **升级**(在线 sysupgrade)
 
-> 体积较大(initramfs 27MB / sysupgrade 28MB)正常:内含 LuCI + OpenClash + Tailscale。
+> 体积较大(initramfs / sysupgrade 约 30–40MB)正常:内含 LuCI + OpenClash + Tailscale +
+> 完整内核模块工具集。闪存为单 UBI 112MB,空间充足。
 
 ### 刷入方法
 
