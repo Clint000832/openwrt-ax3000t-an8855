@@ -3,109 +3,157 @@
 ## 项目目标
 
 记录 `192.168.31.1` 这台 **Xiaomi Mi Router AX3000T（AN8855 交换机）** 的配置与交接要点，
-重点是接入 Tailscale 组网、修复 fw4 对 tailnet 入站的处理，以及与办公室 `router-office`
-节点互连。
+重点是 PPPoE 拨号上网 + 单臂访问光猫、Tailscale 组网（通告子网），以及与办公室节点互连。
 
 ## 设备与环境
 
 - 型号：Xiaomi Mi Router AX3000T（AN8855 5 口千兆交换机）
 - 系统：OpenWrt SNAPSHOT `r0-9f3157a`，架构 `aarch64_cortex-a53`
-- Tailscale 节点：`router-home`，组网 IP **`100.10.0.1`**
+- 主机名：`OpenWrt`；Tailscale 节点：`xiaomi-ax3000t`，组网 IP **`100.104.191.81`**
 - 登录：`ssh root@192.168.31.1`（本机 LAN）
 
 ## 网络拓扑与角色
 
 - LAN：`br-lan` = `192.168.31.1/24`（桥接 `lan2/lan3/lan4`，即 AN8855 下游口）
-- WAN：`wan@eth0`，DHCP 获取上行
-  - 当前接在办公室网络 `192.168.110.x`：WAN IP `192.168.110.13`，网关 `192.168.110.1`
+- WAN：`wan@eth0`，**PPPoE 拨号**（账号/密码见 `/etc/config/network`），`pppoe-wan` 获公网 `100.77.x`
+- 单臂访问光猫：同一物理 WAN 口上另配静态 `192.168.1.99/24` 用于访问光猫 `192.168.1.1`
 - 角色：家中路由器；同时是 Tailscale 组网节点，**通告子网 `192.168.31.0/24`**，
   使远端组网设备能经它访问家庭局域网。
 
 ## 关键配置
 
-### Tailscale
-- 节点 `router-home`，组网 IP `100.10.0.1`，状态：已登录、运行中
-- 通告路由：`192.168.31.0/24`（供远端访问家庭网段）
-- `RouteAll: true`（接受其它节点通告的路由）
-- `CorpDNS: false`（**MagicDNS 关闭**，与办公室一致；访问用组网 IP 而非域名）
-- `WantRunning: true`，开机自启
-- 状态持久化：`/etc/tailscale/tailscaled.state`
-
 ### 网络（/etc/config/network）
-- `br-lan`：`192.168.31.1/24`（桥接 `lan2/lan3/lan4`）
-- `wan`：`eth0`，proto dhcp（上行到办公室 `192.168.110.x`）
-- `tailscale0`：动态创建的 TUN 接口（不在 network 配置里，由 tailscaled 创建）
+
+| 接口 | 协议 | 地址 | 说明 |
+|------|------|------|------|
+| `br-lan` | static | `192.168.31.1/24` | LAN，桥接 `lan2/lan3/lan4` |
+| `wan` | pppoe | 拨号 | 上行 PPPoE 拨号上网 |
+| `Modem` | static | `192.168.1.99/24`，device=`wan` | 单臂访问光猫 `192.168.1.1`（与 PPPoE 共用 WAN 口） |
+| `tailscale0` | TUN | `100.104.191.81/32` | tailscaled 动态创建，不在 network 配置里 |
+
+要点：
+- `Modem` 接口的 `device` 必须是 `wan`（DSA 从端口），不能是 `eth0`（master CPU 口），
+  否则 ARP 不通、ping 光猫失败。
+- `Modem` 接口当前配了 `gateway 192.168.1.1`，但实测**不会抢默认路由**（默认路由由 PPPoE 的
+  `default via 100.77.x dev pppoe-wan` 提供，上网正常）。若出现上网走光猫的异常，可去掉该 gateway。
+
+### Tailscale
+- 节点 `xiaomi-ax3000t`，组网 IP `100.104.191.81`，状态：已登录、运行中
+- **通告路由**：`192.168.31.0/24`（已在控制台审批，`PrimaryRoutes` 生效），`NoSNAT: true`（保留真实源地址）
+- `CorpDNS: false`（**MagicDNS 关闭**；访问一律用 IP）
+- `RouteAll: false`（本机不主动接受其它节点通告的路由——仅通告方需要，按需开启）
+- `RunSSH: false`；开机自启；状态持久化 `/etc/tailscale/tailscaled.state`
+- 自动恢复：init.d 脚本已含 `procd respawn`，tailscaled 崩溃自动重启；断网重连由内置机制处理
 
 ### 防火墙（firewall4 / nftables）
-- 默认只有 `lan` / `wan` zone，**无 `tailscale` zone**
-- 本机自身被组网访问：TCP 由 Tailscale 自带 `ts-input`（`iifname "tailscale0*" accept`）放行；
-  但 **ICMP 会落入 fw4 默认 `handle_reject`**，表现为 `ping 组网IP` 返回
-  `Destination Port Unreachable`（而 SSH 正常）。
+- zone：`lan`（ACCEPT）、`wan`（REJECT，masq）、`modem`（ACCEPT，masq，network=`Modem`）、
+  **`tailscale`**（ACCEPT，network=`tailscale`）
+- 转发：`lan→wan`、`lan→modem`、`tailscale→lan`、`lan→tailscale`（后两条实现组网↔局域网互访）
+- 本机自身被组网访问：Tailscale 自带 `ts-input`（`iifname "tailscale0*" accept`）放行 TCP
 
-## 关键修复：tailnet 入站 ICMP
+## 关键配置 1：单臂拨号 + 访问光猫
 
-### 症状
-- 从组网其它节点（如 Ubuntu `dev`）`ssh root@100.10.0.1` 正常，
-  但 `ping 100.10.0.1` 失败，返回 **`Destination Port Unreachable`**。
+一根 WAN 线同时 PPPoE 拨号上网、又能访问光猫管理页：
 
-### 根因
-`ts-input` 只对 tailscale0 的 TCP 短路放行，ICMP 未命中，继续走到 fw4 `input` 链
-（该链无 `tailscale0` 跳转），落入默认 `handle_reject`，对非 TCP 协议返回
-`reject` → ICMP `Destination Port Unreachable`。
+```sh
+# Modem 接口（静态 192.168.1.99 绑到 wan，与 PPPoE 同物理口）
+uci set network.Modem.device='wan'
+uci set network.Modem.proto='static'
+uci set network.Modem.ipaddr='192.168.1.99'
+uci set network.Modem.netmask='255.255.255.0'
+uci commit network
 
-### 修复（持久化）
-与办公室 `router-office` 同套方案，新增 fw4 `config include` 脚本：
-- 文件：`/etc/firewall-tailscale-input.sh`
-  ```sh
-  #!/bin/sh
-  # 让 fw4 接受来自 tailnet (tailscale0) 进入本机(input)的流量
-  nft insert rule inet fw4 input iifname "tailscale0" counter accept comment "Tailscale_input_accept"
-  ```
-- uci（`/etc/config/firewall`）：
-  ```
-  config include
-  	option type 'script'
-  	option path '/etc/firewall-tailscale-input.sh'
-  ```
-- 仅作用于 `tailscale0`，位于 `handle_reject` 之前，不影响 LAN/WAN。
-- 修复后：`ping 100.10.0.1` 正常（0% 丢包，约 1.2ms，直连），SSH 仍正常。
+# modem zone：允许入站 + masq（让 LAN 设备访问光猫时，光猫看到的源是 192.168.1.99）
+uci set firewall.@zone[2].name='modem'
+uci set firewall.@zone[2].network='Modem'
+uci set firewall.@zone[2].input='ACCEPT'
+uci set firewall.@zone[2].output='ACCEPT'
+uci set firewall.@zone[2].forward='ACCEPT'
+uci set firewall.@zone[2].masq='1'
+uci add firewall forwarding            # lan -> modem
+uci set firewall.@forwarding[-1].src='lan'
+uci set firewall.@forwarding[-1].dest='modem'
+uci commit firewall
+```
+
+验证：`echo -e "GET / HTTP/1.0\r\n\r" | nc 192.168.1.1 80` 应返回 `HTTP/1.0 200 OK`。
+
+## 关键配置 2：Tailscale 子网通告（远端访问家庭局域网）
+
+```sh
+# 通告 192.168.31.0/24，保留真实源地址，保持 MagicDNS 关闭
+tailscale up --accept-dns=false --advertise-routes=192.168.31.0/24 --snat-subnet-routes=false
+
+# 创建 tailscale zone + 转发（组网 ↔ 局域网互访）
+uci set network.tailscale='interface'
+uci set network.tailscale.ifname='tailscale0'
+uci set network.tailscale.proto='none'
+uci commit network
+
+uci add firewall zone
+uci set firewall.@zone[-1].name='tailscale'
+uci set firewall.@zone[-1].network='tailscale'
+uci set firewall.@zone[-1].input='ACCEPT'
+uci set firewall.@zone[-1].output='ACCEPT'
+uci set firewall.@zone[-1].forward='ACCEPT'
+uci commit firewall
+
+uci add firewall forwarding          # tailscale -> lan
+uci set firewall.@forwarding[-1].src='tailscale'
+uci set firewall.@forwarding[-1].dest='lan'
+uci add firewall forwarding          # lan -> tailscale
+uci set firewall.@forwarding[-1].src='lan'
+uci set firewall.@forwarding[-1].dest='tailscale'
+uci commit firewall
+```
+
+**远端侧要求：**
+1. 子网路由 `192.168.31.0/24` 已在 Tailscale 控制台审批（`PrimaryRoutes` 生效）
+2. 远端客户端需开启 **accept-routes**，例如 Ubuntu：`tailscale up --reset --accept-routes --accept-dns=false --ssh`
+3. 生效后远端可 `ping 192.168.31.x` 直接访问家庭局域网设备（走直连隧道，约 10–70ms）
+
+## 关键配置 3：系统 / WiFi 基础优化
+
+- 时区：`Asia/Shanghai`（CST-8），NTP 用阿里/腾讯国内源
+- DNS：保持运营商上游，不启用 MagicDNS
+- WiFi：双频统一 SSID `猪猪之家`，WPA2/WPA3-PSK；2.4G 信道 1/HE20，5G 信道 149(实际 153)/HE80，country=`CN`，Tx 28dBm
+- 默认防火墙 wan zone `input=REJECT`，公网无法访问 80/443/22
 
 ## 使用方式
 
-- 组网内任何节点访问本机：`ssh root@100.10.0.1`
-- 远端访问家庭局域网设备：先确认手机/客户端开启 accept-routes 且子网路由
-  `192.168.31.0/24` 已在控制台审批，再 `ssh root@192.168.31.x`。
+- 组网内任何节点访问本机：`ssh root@100.104.191.81`
+- 远端访问家庭局域网设备：`ssh root@192.168.31.x` 或直接访问 `192.168.31.x`（需子网路由已审批 + 客户端 accept-routes）
 - 因 MagicDNS 关闭，一律使用 IP。
 
 ## 常用命令（本机）
 
 ```sh
-tailscale status                    # 组网状态
-tailscale ping 100.10.0.1        # 控制面连通性
+tailscale status                       # 组网状态
+tailscale ping 100.104.191.81        # 控制面连通性
 tailscale debug prefs | grep -i corp  # 确认 MagicDNS 关闭
+tailscale debug prefs | grep -iA1 AdvertiseRoutes  # 确认通告子网
 /etc/init.d/tailscale restart
 /etc/init.d/firewall reload
 ```
 
 ## 交接要点 / 坑
 
-- **ICMP 被拒 ≠ SSH 被拒**：本机 SSH 正常但 ping 报 `Destination Port Unreachable`，
-  即 fw4 `handle_reject` 兜底。修复靠上面的 include 脚本。
+- **单臂访问光猫的 IP 必须绑 `wan`**，不是 `eth0`；且 `Modem` 接口**不要配 gateway**（会抢默认路由）。
+- **ICMP 被拒 ≠ SSH 被拒**：本机 SSH 正常但 ping 报 `Destination Port Unreachable` 是 fw4 兜底，
+  需 `tailscale0` zone 或 include 脚本放行 input。
 - **不要**改动 `CorpDNS` 开启 MagicDNS（需求要求关闭）。
-- 该机默认无 `tailscale` zone：本机自身入站靠 `ts-input` + 上面脚本。
-  若还要**远端访问家庭网内其它主机**（`192.168.31.x` 除本机外），需再补
-  `tailscale` zone + `tailscale->lan` 转发（当前未配置）。
-- WAN 断线会导致无默认路由、DNS 失败、Tailscale 无法登录控制面（表现为
-  `tailscale status` 显示 logged out / NoState）。先保证 WAN 有链路。
-- 遗留：防火墙配置里有一个失效的 `openclash` include（路径
-  `/var/etc/openclash.include` 不存在），reload 时报警告，与组网无关，可清理。
+- 子网通告需**控制台审批** + **远端 accept-routes**，缺一不可。
+- WAN 断线会导致无默认路由、DNS 失败、Tailscale 无法登录控制面（`tailscale status` 显示 logged out）。
+  先保证 WAN 有链路；`procd respawn` 保证 tailscaled 崩溃自启。
+- **root 密码**务必设置：局域网内设备可直接 SSH 登录（公网已被 wan zone REJECT 挡住）。
 
 ## 与办公室节点互连
 
-- 本机 `router-home`（100.10.0.1）与办公室 `router-office`（100.10.0.2）同账号组网。
-- 本机 WAN 实际接在办公室网段 `192.168.110.x`，属"从家连到办公网络"的物理拓扑。
+- 本机 `xiaomi-ax3000t`（100.104.191.81，家中）与办公室 `dev`（100.95.46.79，Ubuntu）
+  同账号组网，`tailscale ping` 直连约 10ms。
+- 办公室 `dev` 已开 accept-routes，可从办公室访问家庭 `192.168.31.x` 实测通（路由器 11ms、局域网 Mac 65ms）。
 
 ## 已知限制
 
-- 远端访问家庭 LAN 内其它设备需子网路由审批 + 客户端 accept-routes，且本机需补 `tailscale` zone。
+- 远端访问家庭 LAN 内其它设备需子网路由审批 + 客户端 accept-routes（已在本机与办公室 `dev` 验证）。
 - 依赖家庭网络链路正常；WAN 掉线即失去外部可达性。
