@@ -210,12 +210,13 @@ CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-ssl=y
 CONFIG_LUCI_LANG_zh_Hans=y
 
-# OpenClash 依赖 Lua,而主线 LuCI 26 已删 Lua,必须带 luci-compat(+lua-runtime)
-# 否则 OpenClash 菜单不显示。defconfig 会自动补上其依赖。
-CONFIG_PACKAGE_luci-compat=y
-CONFIG_PACKAGE_luci-lua-runtime=y
-
-CONFIG_PACKAGE_luci-app-openclash=y
+# ⚠️ OpenClash 不再打进固件:其 apk 约 8MB(含 clash core),会使 initramfs-FIT
+# 超过原厂 U-Boot 的加载体积上限(26MB 可启动,34MB 起不来)。改为单独编译成
+# package,装时从 apk 源 `apk add luci-app-openclash` 即可(会自动拉 luci-compat/
+# luci-lua-runtime 等依赖)。需要时在最后一步 make package/.../compile 单独产出。
+# CONFIG_PACKAGE_luci-compat=y
+# CONFIG_PACKAGE_luci-lua-runtime=y
+# CONFIG_PACKAGE_luci-app-openclash=y
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 
 CONFIG_PACKAGE_tailscale=y
@@ -475,8 +476,8 @@ make defconfig
 echo ""
 echo "  已自动选中:"
 echo "    Target Profile -> Xiaomi Mi Router AX3000T (AN8855, 单 UBI, 原厂 U-Boot)"
-echo "    LuCI (+ SSL,中文) / luci-compat(Lua, OpenClash 必需)"
-echo "    OpenClash / Tailscale + luci-app-tailscale-community"
+echo "    LuCI (+ SSL,中文)"
+echo "    OpenClash 仅单独编译为 apk(不进固件) / Tailscale + luci-app-tailscale-community"
 echo "    zram 内存压缩 / iptables+nftables 双栈 / 完整 netfilter+隧道+QoS kmod"
 echo "    tcpdump / conntrack / ipset / tc-full / 文件系统 / USB 存储 / 诊断工具"
 echo ""
@@ -528,9 +529,15 @@ echo "  请尽快在 LuCI 中设置 root 密码与 WiFi 加密!"
 
 if [ "$1" = "build" ]; then
     echo ""
-    echo "=== 步骤 7: 开始编译 ==="
+    echo "=== 步骤 7: 开始编译(固件不含 OpenClash) ==="
     echo "  运行: make -j\$(nproc) V=s | tee build.log"
     make -j"$(nproc)" V=s 2>&1 | tee build.log
+
+    echo ""
+    echo "=== 步骤 8: 单独编译 OpenClash 为 apk(不进固件,装时 apk add) ==="
+    echo "  运行: make package/feeds/openclash/luci-app-openclash/compile V=s"
+    make package/feeds/openclash/luci-app-openclash/compile V=s 2>&1 | tee -a build.log
+    echo "  产物在: bin/packages/aarch64_cortex-a53/openclash/"
 else
     echo ""
     echo "============================================"

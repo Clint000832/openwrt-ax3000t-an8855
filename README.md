@@ -1,6 +1,6 @@
 # 为 Xiaomi Mi Router AX3000T (AN8855) 编译 OpenWrt 主线 + OpenClash
 
-本仓库指导为 **Xiaomi Mi Router AX3000T(AN8855 交换芯片版本)** 从 **OpenWrt 主线 (main)** 编译纯净固件,并集成 **OpenClash** (Clash / Mihomo 客户端) 与 **Tailscale**。
+本仓库指导为 **Xiaomi Mi Router AX3000T(AN8855 交换芯片版本)** 从 **OpenWrt 主线 (main)** 编译纯净固件,并集成 **Tailscale**;Clash/Mihomo 客户端 **OpenClash 以独立 apk 提供**(不进固件,避免镜像超原厂 U-Boot 加载上限)。
 
 > **更新要点(相对旧版):**
 > - OpenWrt 主线 (内核 ≈6.18) **已原生支持 AN8855 交换芯片**,DTS/驱动都在主线里,不再需要任何 target 源码补丁。
@@ -88,7 +88,7 @@ bash setup.sh
 # 2) 进入克隆出的目录
 cd openwrt-ax3000t
 
-# 3) 微调软件包(确保选中 Target Profile 与 luci-app-openclash)
+# 3) 微调软件包(确保选中 Target Profile)
 make menuconfig
 
 # 4) 编译(建议后台跑,首次约 2–6 小时)
@@ -103,7 +103,7 @@ bash setup.sh build
 2. 在 `feeds.conf` 追加 OpenClash feed;
 3. **应用 `patches/` 里的 an8855 单 UBI 目标补丁**(filogic.mk / platform.sh / 02_network / DTS,已应用则跳过);
 4. `./scripts/feeds update -a && install -a`;
-5. `make defconfig` 生成默认配置(已含 an8855 目标、`luci-compat`、OpenClash、Tailscale、**完整工具集**);
+5. `make defconfig` 生成默认配置(已含 an8855 目标、Tailscale、**完整工具集**;**不含 OpenClash**,单独编译为 apk);
 6. 写入 **USTC apk 镜像**(`CONFIG_VERSIONOPT=y` + `CONFIG_VERSION_REPO`)。
 
 ### menuconfig 必查项
@@ -114,12 +114,19 @@ bash setup.sh build
 | Subtarget | `Filogic 820/830 (MT7981/MT7986)` |
 | Target Profile | `Xiaomi Mi Router AX3000T (AN8855)`(单 UBI,新目标;勿选带 `(OpenWrt U-Boot layout)` 的 ubootmod)|
 | LuCI → Collections | `luci`(`luci-ssl` 更佳) |
-| LuCI → Libraries | `luci-compat`(及其依赖 `luci-lua-runtime`,**OpenClash 必需**) |
-| LuCI → Applications | `luci-app-openclash`、`luci-app-tailscale-community`、`luci-app-nlbwmon` |
+| LuCI → Applications | `luci-app-tailscale-community`、`luci-app-nlbwmon`(**OpenClash 不进固件**,见下方说明) |
 | LuCI → Translations | 中文(由 `LUCI_LANG_zh_Hans` 总开关控制,setup.sh 已预置) |
 | Global build settings → Image configuration → Release repository | `https://mirrors.ustc.edu.cn/openwrt/snapshots`(USTC 镜像) |
 
-> OpenClash 依赖(dnsmasq-full / bash / curl / ipset / ruby 等)与 Tailscale 依赖(`kmod-tun`)会被自动拉入。
+> Tailscale 依赖(`kmod-tun`)会被自动拉入。
+
+> **OpenClash 不再打进固件(单独编译为 apk,`setup.sh` 已改):**
+> 其 apk 约 8MB(含 clash core),若直接选入固件会使 initramfs-FIT 超过原厂 U-Boot
+> 的加载体积上限(实测 26MB 能启动、34MB 起不来)。现由 `setup.sh build` 在固件编完后
+> 单独执行 `make package/feeds/openclash/luci-app-openclash/compile`,产出
+> `bin/packages/aarch64_cortex-a53/openclash/luci-app-openclash-*.apk`,装时
+> `apk add luci-app-openclash`(会自动拉 `luci-compat`/`luci-lua-runtime`/dnsmasq-full/
+> bash/curl/ipset/ruby 等依赖)。
 
 > **内核相关包只能编译期打入(apk 无法安装),`setup.sh` 已全量预置**,包括:
 > - zram 内存压缩(`kmod-zram` + `zram-swap`)
@@ -129,10 +136,10 @@ bash setup.sh build
 > - 文件系统:ext4/f2fs/exfat/vfat/ntfs3/btrfs/xfs 等;USB 存储/串口/4G 网卡驱动
 > - 诊断工具:tcpdump / conntrack / conntrackd / ipset / ip-full / tc-full / iperf3 / ethtool / mtr / nlbwmon 等
 
-> ⚠️ **OpenClash 必须带 `luci-compat`:** 主线 LuCI 26 已彻底移除 Lua 运行时,
-> 而 OpenClash 是纯 Lua 应用。若不选 `luci-compat`(会自动带上 `luci-lua-runtime`),
-> 固件里虽有 OpenClash 文件,但 `服务 > OpenClash` 菜单**不会出现**。
-> `setup.sh` 已自动加 `CONFIG_PACKAGE_luci-compat=y` + `CONFIG_PACKAGE_luci-lua-runtime=y`。
+> ⚠️ **OpenClash 若需安装,必须带 `luci-compat`:** 主线 LuCI 26 已彻底移除 Lua 运行时,
+> 而 OpenClash 是纯 Lua 应用。`apk add luci-app-openclash` 会自动拉入
+> `luci-compat`(含 `luci-lua-runtime`);若手动 scp 装 apk 时需一并装上这俩,否则
+> `服务 > OpenClash` 菜单**不会出现**。
 
 > ⚠️ **USTC 镜像需同时开启 `VERSIONOPT`:** `VERSION_REPO` 等符号挂在
 > `Global build settings → Image configuration` 菜单下,须 `CONFIG_VERSIONOPT=y` 才会写入
@@ -165,7 +172,7 @@ patch -p1 --forward -i ../patches/0001-add-an8855-target.patch
 
 # 配置 + 编译
 make defconfig
-make menuconfig   # 务必选 an8855 目标 + luci-compat + luci-app-openclash
+make menuconfig   # 务必选 an8855 目标;OpenClash 由 setup.sh 单独编译为 apk
 make -j$(nproc) V=s 2>&1 | tee build.log
 ```
 
@@ -190,8 +197,9 @@ ls -lh bin/targets/mediatek/filogic/
 - `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-initramfs-factory.ubi` — **首次刷入**(从原厂系统/原厂 U-Boot 启动 OpenWrt 内存版)
 - `openwrt-mediatek-filogic-xiaomi_mi-router-ax3000t-an8855-squashfs-sysupgrade.bin` — **升级**(在线 sysupgrade)
 
-> 体积较大(initramfs / sysupgrade 约 30–40MB)正常:内含 LuCI + OpenClash + Tailscale +
+> 体积较大(initramfs / sysupgrade 约 25–30MB)正常:内含 LuCI + Tailscale +
 > 完整内核模块工具集。闪存为单 UBI 112MB,空间充足。
+> **OpenClash 已从固件剔除**(单独 apk,避免 initramfs 超原厂 U-Boot 加载上限)。
 
 ### 刷入方法
 
@@ -240,24 +248,33 @@ ssh root@192.168.31.1 'sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin'
 
 ## 6. 常见问题
 
-### Q: 编译时 OpenClash 包没有出现?
+### Q: 单独编译 OpenClash 时包没出现?
 
-确认 `feeds.conf` 里有 OpenClash feed,并执行过 `./scripts/feeds update -a && ./scripts/feeds install -a`,然后 `make menuconfig` → LuCI → Applications。
+确认 `feeds.conf` 里有 OpenClash feed,并执行过 `./scripts/feeds update -a && ./scripts/feeds install -a`。
+OpenClash 不进固件,单独用
+`make package/feeds/openclash/luci-app-openclash/compile V=s`
+产出 `bin/packages/aarch64_cortex-a53/openclash/luci-app-openclash-*.apk`(setup.sh build 已自动做)。
 
-### Q: 刷进去系统里看不到 OpenClash 菜单?
+### Q: 固件里怎么没有 OpenClash?
 
-`luci-app-openclash` 其实已装进固件(在 `usr/share/openclash/`、`/etc/init.d/openclash` 等都有文件),
-但**菜单不显示**,原因是:主线 **LuCI 26 移除了 Lua 运行时**,而 OpenClash 是纯 Lua 应用。
+OpenClash 已从固件剔除(单独 apk),避免 initramfs 超原厂 U-Boot 加载上限。安装方式:
 
-- **正确修法(编译期,一次到位):** 在 `.config` 选中 `CONFIG_PACKAGE_luci-compat=y`
-  (连同 `luci-lua-runtime`),重新编译刷机。`setup.sh` 已自动加这两项。
-- **临时修法(运行期,不重刷):** 在路由器上手动安装 compat(见下)。
-
-**运行期手动安装 luci-compat(OpenWrt main 用 apk,旧版用 opkg):**
 ```sh
-# 先更新软件源(需联网)
-apk update            # 或 opkg update
-apk add luci-compat   # 或 opkg install luci-compat
+# 把 setup.sh 单独编译出的 apk 传到路由器,或直接从 apk 源安装
+scp bin/packages/aarch64_cortex-a53/openclash/luci-app-openclash-*.apk root@192.168.31.1:/tmp/
+ssh root@192.168.31.1 'apk add /tmp/luci-app-openclash-*.apk && apk add luci-compat'
+```
+
+会自动拉入 `luci-compat`/`luci-lua-runtime`/dnsmasq-full/bash/curl/ipset/ruby 等依赖。
+
+### Q: 装了 OpenClash 但看不到菜单?
+
+`luci-app-openclash` 已装(在 `usr/share/openclash/`、`/etc/init.d/openclash` 等都有文件),
+但**菜单不显示**,原因是:主线 **LuCI 26 移除了 Lua 运行时**,而 OpenClash 是纯 Lua 应用,
+必须带 `luci-compat`(含 `luci-lua-runtime`)。
+
+```sh
+apk update && apk add luci-compat
 /etc/init.d/uhttpd restart
 # 刷新 LuCI 页面,服务 > OpenClash 出现后再去 OpenClash 设置里下载核心
 ```
