@@ -99,6 +99,7 @@ for s in \
     VERSIONOPT VERSION_REPO \
     PACKAGE_luci PACKAGE_luci-ssl LUCI_LANG_zh_Hans \
     PACKAGE_luci-compat PACKAGE_luci-lua-runtime \
+    PACKAGE_luci-mod-dsl PACKAGE_luci-i18n-dsl-zh-cn \
     PACKAGE_luci-app-openclash PACKAGE_luci-app-nlbwmon \
     PACKAGE_tailscale PACKAGE_luci-app-tailscale-community \
     PACKAGE_iptables PACKAGE_iptables-nft PACKAGE_ip6tables-nft \
@@ -209,6 +210,10 @@ CONFIG_VERSION_REPO="https://mirrors.ustc.edu.cn/openwrt/snapshots"
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-ssl=y
 CONFIG_LUCI_LANG_zh_Hans=y
+
+# 剔除用不到的默认 LuCI 模块(路由器无用,保持菜单干净)
+# CONFIG_PACKAGE_luci-mod-dsl is not set
+# CONFIG_PACKAGE_luci-i18n-dsl-zh-cn is not set
 
 # ⚠️ OpenClash 不再打进固件:其 apk 约 8MB(含 clash core),会使 initramfs-FIT
 # 超过原厂 U-Boot 的加载体积上限(26MB 可启动,34MB 起不来)。改为单独编译成
