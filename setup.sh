@@ -212,10 +212,12 @@ CONFIG_LUCI_LANG_zh_Hans=y
 
 # ⚠️ OpenClash 不再打进固件:其 apk 约 8MB(含 clash core),会使 initramfs-FIT
 # 超过原厂 U-Boot 的加载体积上限(26MB 可启动,34MB 起不来)。改为单独编译成
-# package,装时从 apk 源 `apk add luci-app-openclash` 即可(会自动拉 luci-compat/
-# luci-lua-runtime 等依赖)。需要时在最后一步 make package/.../compile 单独产出。
-# CONFIG_PACKAGE_luci-compat=y
-# CONFIG_PACKAGE_luci-lua-runtime=y
+# package,装时从 apk 源 `apk add luci-app-openclash` 即可。需要时在最后一步
+# make package/.../compile 单独产出。
+# ── 但 luci-compat(+luci-lua-runtime)必须保留:luci-base 渲染依赖其提供的
+#    luci.ucodebridge 模块,缺失会报 "module 'luci.ucodebridge' not found"。
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-lua-runtime=y
 # CONFIG_PACKAGE_luci-app-openclash=y
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 

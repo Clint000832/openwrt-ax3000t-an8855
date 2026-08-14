@@ -141,10 +141,10 @@ bash setup.sh build
 > > 加载体积上限(26MB 可启动)导致内核反复 panic/复位。已裁到 26MB 以内。需要更多
 > > 功能时 `make menuconfig` 按需勾选,或单独编译为 apk 再装。
 
-> ⚠️ **OpenClash 若需安装,必须带 `luci-compat`:** 主线 LuCI 26 已彻底移除 Lua 运行时,
-> 而 OpenClash 是纯 Lua 应用。`apk add luci-app-openclash` 会自动拉入
-> `luci-compat`(含 `luci-lua-runtime`);若手动 scp 装 apk 时需一并装上这俩,否则
-> `服务 > OpenClash` 菜单**不会出现**。
+> ℹ️ **`luci-compat` + `luci-lua-runtime` 已内置在固件里**(不是只为 OpenClash):
+> 主线 LuCI 26 的 `luci-base` 渲染依赖它们提供的 `luci.ucodebridge` 模块,缺失会报
+> `module 'luci.ucodebridge' not found`。同时 OpenClash 也是纯 Lua 应用,`apk add
+> luci-app-openclash` 会直接复用这俩,菜单即可显示。
 
 > ⚠️ **USTC 镜像需同时开启 `VERSIONOPT`:** `VERSION_REPO` 等符号挂在
 > `Global build settings → Image configuration` 菜单下,须 `CONFIG_VERSIONOPT=y` 才会写入
