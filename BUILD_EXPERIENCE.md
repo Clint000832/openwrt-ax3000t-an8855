@@ -275,6 +275,31 @@ make → fakeroot → faked (daemon, background)
 | `GnuTLS recv error` | 直连 GitHub 失败 | 使用代理 clone |
 | `No more mirrors to give up` | dl 文件损坏 | `rm dl/badfile*` 重跑 |
 | `make: Nothing to be done` | stamp 文件存在但产物缺失 | `rm staging_dir/.../stamp/.target` |
+| 刷机起不来，落回恢复页 | 用了 stock 双分区目标 | 必须用 `-an8855` 单 UBI 目标，见 §5 |
+| **OpenClash 菜单不显示** | `ls /usr/lib/lua/luci/controller/openclash.lua` | 主线 LuCI 26 删了 Lua，需选 `luci-compat`，见 §8 |
+
+## 8. OpenClash + LuCI 26 兼容性(Lua 运行时缺失)
+
+**现象:** `luci-app-openclash` 已编进固件(`/usr/share/openclash/`、`/etc/init.d/openclash` 都在),
+但 LuCI 界面 `服务 > OpenClash` 菜单不出现。
+
+**根因:** OpenWrt 主线(main)的 **LuCI 26 已彻底移除 Lua 运行时**,而 OpenClash 是**纯 Lua** 应用
+(`luasrc/controller/openclash.lua`、`view/*.htm` 全是 Lua)。没有 Lua 运行时,LuCI dispatcher 不会加载该控制器。
+可用 `unsquashfs` 解开 sysupgrade 镜像确认:`/usr/lib/lua/luci/` 里**只有 OpenClash 的文件**,
+没有 `dispatcher.lua` / `compat`。
+
+**修法(编译期,推荐):** `.config` 里必须选中
+`CONFIG_PACKAGE_luci-compat=y`(自动带 `luci-lua-runtime` 及其 Lua 依赖),`setup.sh` 已自动加上。
+否则 OpenClash 永远不显示。
+
+**修法(运行期,不重刷):**
+```sh
+apk update && apk add luci-compat   # main 用 apk;旧版用 opkg install luci-compat
+/etc/init.d/uhttpd restart
+# 刷新 LuCI,OpenClash 菜单出现后再进设置下载核心
+```
+
+**教训:** 不能只看 manifest 里有 `luci-app-openclash` 就认为能用 —— 必须先确认 LuCI 版本是否还支持 Lua。
 
 ---
 

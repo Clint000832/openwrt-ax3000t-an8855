@@ -5,13 +5,17 @@
 # 本脚本基于 OpenWrt 主线 (main, ~内核 6.18) 编译。
 #
 # 重要变化:
-#   * 主线 OpenWrt 已原生支持 AN8855 交换芯片 (DTS + 驱动),
-#     无需任何 target 源码补丁。
-#   * 与原 AX3000T (MT7531) 共用 stock 布局
-#     (xiaomi_mi-router-ax3000t),固件通过
-#     initramfs-factory.ubi 从原厂 U-Boot 启动刷入。
+#   * 主线 OpenWrt 已原生支持 AN8855 交换芯片 (驱动),但**没有**独立的
+#     an8855 启动布局目标,必须手工重建单 UBI 目标
+#     (xiaomi_mi-router-ax3000t-an8855)。patches/ 里的补丁会自动打上。
+#   * 原厂 U-Boot + AN8855 只能用**单 UBI 布局**才能持久启动;
+#     官方 stock 双分区目标 (xiaomi_mi-router-ax3000t) 在本机会落回恢复页,
+#     勿用。详见 ROUTER_STATE.md §0。
 #   * 无自定义 fwx 内核补丁,保持纯净主线。
 #   * 额外集成 OpenClash (luci-app-openclash) 官方 feed。
+#   * ⚠️ OpenClash 是 Lua 应用,但主线 LuCI 26 已移除 Lua 运行时,
+#     必须同时选中 luci-compat (及其依赖 luci-lua-runtime),否则
+#     OpenClash 菜单不会出现。本脚本已自动加 CONFIG_PACKAGE_luci-compat=y。
 #
 # 用法:
 #   1) bash setup.sh          # 只做克隆 + feeds + 配置
@@ -21,6 +25,8 @@
 set -e
 
 export OPENWRT_DIR="$(pwd)/openwrt-ax3000t"
+# 外层仓库的 patches/ 目录(含 an8855 目标补丁),相对本脚本所在目录推导
+export PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/patches"
 OPENCLASH_URL="https://github.com/vernesong/OpenClash.git"
 OPENCLASH_CFG="src-git openclash ${OPENCLASH_URL}"
 
@@ -53,6 +59,22 @@ else
 fi
 
 echo ""
+echo "=== 步骤 2.5: 应用 an8855 单 UBI 目标补丁(关键!) ==="
+# 主线 main 只有 stock 双分区 / ubootmod 目标,AN8855 + 原厂 U-Boot 需要
+# 独立的单 UBI 目标才能持久启动。补丁文件固化在外层仓库 patches/ 下。
+# 若已应用(设备已在 filogic.mk 中定义)则跳过,避免重复打补丁报错。
+if grep -q "Device/xiaomi_mi-router-ax3000t-an8855" target/linux/mediatek/image/filogic.mk; then
+    echo "  an8855 目标已存在,跳过打补丁"
+else
+    echo "  复制 DTS ..."
+    cp "${PATCH_DIR}/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts" \
+       target/linux/mediatek/dts/
+    echo "  应用 filogic.mk / platform.sh / 02_network 补丁 ..."
+    patch -p1 --forward -i "${PATCH_DIR}/0001-add-an8855-target.patch"
+    echo "  已应用 an8855 目标补丁"
+fi
+
+echo ""
 echo "=== 步骤 3: 更新并安装 feeds ==="
 ./scripts/feeds update -a
 ./scripts/feeds install -a
@@ -68,8 +90,9 @@ echo "=== 步骤 5: 预置本设备目标 + OpenClash + LuCI ==="
 #    CONFIG_TARGET_<target>_<subtarget>_DEVICE_<device>)
 # 先清掉可能已存在的相关行,避免 "key 多次定义" 警告/被覆盖。
 for s in TARGET_mediatek TARGET_mediatek_filogic \
-         TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-ax3000t \
+         TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-ax3000t-an8855 \
          PACKAGE_luci PACKAGE_luci-ssl LUCI_LANG_zh_Hans \
+         PACKAGE_luci-compat PACKAGE_luci-lua-runtime \
          PACKAGE_luci-app-openclash \
          PACKAGE_tailscale PACKAGE_luci-app-tailscale-community; do
     sed -i "/^CONFIG_$s=/d; /^# CONFIG_${s} is not set\$/d" .config
@@ -77,11 +100,16 @@ done
 cat >> .config <<'EOF'
 CONFIG_TARGET_mediatek=y
 CONFIG_TARGET_mediatek_filogic=y
-CONFIG_TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-ax3000t=y
+CONFIG_TARGET_mediatek_filogic_DEVICE_xiaomi_mi-router-ax3000t-an8855=y
 
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-ssl=y
 CONFIG_LUCI_LANG_zh_Hans=y
+
+# OpenClash 依赖 Lua,而主线 LuCI 26 已删 Lua,必须带 luci-compat(+lua-runtime)
+# 否则 OpenClash 菜单不显示。defconfig 会自动补上其依赖。
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-lua-runtime=y
 
 CONFIG_PACKAGE_luci-app-openclash=y
 
@@ -92,8 +120,9 @@ make defconfig
 
 echo ""
 echo "  已自动选中:"
-echo "    Target Profile -> Xiaomi Mi Router AX3000T (stock 布局,AN8855 自动支持)"
-echo "    LuCI (+ SSL,中文) / OpenClash / Tailscale + luci-app-tailscale-community"
+echo "    Target Profile -> Xiaomi Mi Router AX3000T (AN8855, 单 UBI, 原厂 U-Boot)"
+echo "    LuCI (+ SSL,中文) / luci-compat(Lua, OpenClash 必需)"
+echo "    OpenClash / Tailscale + luci-app-tailscale-community"
 echo ""
 echo "  如需调整运行: make menuconfig"
 
