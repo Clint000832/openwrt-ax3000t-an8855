@@ -29,17 +29,35 @@ set -e
 
 export OPENWRT_DIR="$(pwd)/openwrt-ax3000t"
 # 外层仓库的 patches/ 目录(含 an8855 目标补丁),相对本脚本所在目录推导
-export PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/patches"
+export REPO_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/patches"
+# 本仓库 scripts/ 目录(构建后体积校验等)
+export SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/scripts"
 OPENCLASH_URL="https://github.com/vernesong/OpenClash.git"
 OPENCLASH_CFG="src-git openclash ${OPENCLASH_URL}"
+
+# 锁定到一个已验证可编译的 main commit(防主线漂移导致补丁失效)。
+# 值由 patches/VERIFIED_COMMIT 提供;置空则跟随 main 最新(不推荐)。
+# 切换/更新:构建前把新 sha 写进 patches/VERIFIED_COMMIT 并在 dry-run 全过后再 build。
+if [ -f "$REPO_PATCH_DIR/VERIFIED_COMMIT" ]; then
+    # 取第一行非空、非 # 注释行作为 commit sha
+    OPENWRT_COMMIT="$(grep -vE '^\s*(#|$)' "$REPO_PATCH_DIR/VERIFIED_COMMIT" | head -n1 | tr -d '[:space:]' || true)"
+else
+    OPENWRT_COMMIT=""
+fi
 
 echo ""
 echo "=== 步骤 1: 克隆 OpenWrt 主线 ==="
 if [ ! -d "$OPENWRT_DIR" ]; then
     git clone --depth 1 --branch main --single-branch \
         https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
+fi
+if [ -n "$OPENWRT_COMMIT" ]; then
+    echo "  锁定到已验证 commit: $OPENWRT_COMMIT"
+    git -C "$OPENWRT_DIR" fetch --depth 1 origin "$OPENWRT_COMMIT" \
+        || { echo "  无法获取 commit $OPENWRT_COMMIT,检查 patches/VERIFIED_COMMIT" >&2; exit 1; }
+    git -C "$OPENWRT_DIR" checkout --force "$OPENWRT_COMMIT"
 else
-    echo "  目录已存在,跳过克隆"
+    echo "  ⚠️ 未设置 OPENWRT_COMMIT(patches/VERIFIED_COMMIT 缺失),跟随 main 最新,补丁可能漂移失效。"
 fi
 
 cd "$OPENWRT_DIR"
@@ -70,11 +88,34 @@ if grep -q "Device/xiaomi_mi-router-ax3000t-an8855" target/linux/mediatek/image/
     echo "  an8855 目标已存在,跳过打补丁"
 else
     echo "  复制 DTS ..."
-    cp "${PATCH_DIR}/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts" \
+    cp "${REPO_PATCH_DIR}/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts" \
        target/linux/mediatek/dts/
     echo "  应用 filogic.mk / platform.sh / 02_network 补丁 ..."
-    patch -p1 --forward -i "${PATCH_DIR}/0001-add-an8855-target.patch"
+    # 先 dry-run 全量校验,任一 hunk 不匹配(主线已漂移)则整体失败并给友好提示,
+    # 避免编到一半才因补丁问题崩溃。
+    for p in "${REPO_PATCH_DIR}"/*.patch; do
+        echo "    dry-run: $(basename "$p")"
+        if ! patch -p1 --forward --dry-run -i "$p"; then
+            echo "  ❌ 补丁 $(basename "$p") 无法应用:main 已漂移。" >&2
+            echo "     方案A: 把 main 锁定到 patches/VERIFIED_COMMIT 里的已验证 commit。" >&2
+            echo "     方案B: 手工修此补丁后重试。" >&2
+            exit 1
+        fi
+    done
+    for p in "${REPO_PATCH_DIR}"/*.patch; do
+        patch -p1 --forward -i "$p"
+    done
     echo "  已应用 an8855 目标补丁"
+    # 应用后显式校验关键符号确实出现,防止"看似成功实则没生效"。
+    if ! grep -q "Device/xiaomi_mi-router-ax3000t-an8855" target/linux/mediatek/image/filogic.mk; then
+        echo "  ❌ 应用后 filogic.mk 未出现 an8855 目标,补丁未真正生效。" >&2
+        exit 1
+    fi
+    if ! grep -q "xiaomi,mi-router-ax3000t-an8855" target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh; then
+        echo "  ❌ 应用后 platform.sh 未出现 an8855 升级入口,补丁未真正生效。" >&2
+        exit 1
+    fi
+    echo "  补丁生效校验通过。"
 fi
 
 echo ""
@@ -367,10 +408,33 @@ if [ "$1" = "build" ]; then
     make -j"$(nproc)" V=s 2>&1 | tee build.log
 
     echo ""
+    echo "=== 步骤 7.5: initramfs 体积校验(原厂 U-Boot 上限) ==="
+    TARGET_DIR="$OPENWRT_DIR/bin/targets/mediatek/filogic"
+    STRICT=1 bash "${SCRIPT_DIR}/check-image-size.sh" "$TARGET_DIR" \
+        || { echo "  ❌ initramfs 超限,停止 OpenClash 编译以避免在坏产物上继续。" >&2; exit 1; }
+
+    echo ""
     echo "=== 步骤 8: 单独编译 OpenClash 为 apk(不进固件,装时 apk add) ==="
     echo "  运行: make package/feeds/openclash/luci-app-openclash/compile V=s"
     make package/feeds/openclash/luci-app-openclash/compile V=s 2>&1 | tee -a build.log
-    echo "  产物在: bin/packages/aarch64_cortex-a53/openclash/"
+    # 校验 apk 确实生成
+    APK_GLOB="$OPENWRT_DIR/bin/packages/aarch64_cortex-a53/openclash/luci-app-openclash-*.apk"
+    if ! ls $APK_GLOB >/dev/null 2>&1; then
+        echo "  ❌ 未生成 OpenClash apk(路径:$APK_GLOB),请检查 openclash feed 是否安装成功。" >&2
+        exit 1
+    fi
+    echo "  OpenClash apk 已生成:"
+    ls -lh $APK_GLOB
+
+    echo ""
+    echo "=== 步骤 9: 产物汇总(体积校验 + sha256) ==="
+    STRICT=1 bash "${SCRIPT_DIR}/check-image-size.sh" "$TARGET_DIR"
+    echo ""
+    echo "  OpenClash apk:"
+    for f in $APK_GLOB; do
+        printf "    %s  %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$(basename "$f")"
+    done
+    echo ""
 else
     echo ""
     echo "============================================"

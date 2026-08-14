@@ -1,10 +1,14 @@
 # Xiaomi Mi Router AX3000T (AN8855) OpenWrt 编译实战总结
 
 > **现状提醒(更新于 2026-08):** 本文是早期 24.10 + 自定义 AN8855/fwx 补丁的踩坑记录。
-> 当前仓库已切换到 **OpenWrt 主线 (main, ≈内核 6.18)**:**AN8855 支持已原生进入主线**,
-> 不再需要自定义 DTS / kernel 补丁。固件目标用共用的 stock 布局 `xiaomi_mi-router-ax3000t`。
+> 当前仓库已切换到 **OpenWrt 主线 (main, ≈内核 6.18)**:**AN8855 交换芯片的驱动/内核支持已原生进入主线**,
+> 但**启动布局目标仍需手工重建**——主线只有 stock 双分区(`xiaomi_mi-router-ax3000t`)
+> 与 ubootmod 目标,AN8855 + 原厂 U-Boot 必须用**单 UBI 目标
+> `xiaomi_mi-router-ax3000t-an8855`**,由 `patches/` 里的补丁重建(与 24.10 官方 an8855
+> 目标布局一致)。所以"不再需要任何 target 补丁"的说法**不成立**,只是不再需要自定义
+> **内核/fwx** 补丁而已。固件目标统一用该单 UBI 目标。
 > 下面记录的 **WSL PATH、fakeroot 死锁、代理加速、断点续编** 等问题对主线编译同样适用,
-> 仅"核心改动"与"内核 patch"相关章节不再适用(主线已不需要)。
+> 仅"核心改动"中与自定义内核补丁相关的描述不再适用。
 >
 > **原始背景:** 为 AX3000T (外挂 AN8855) 从源码编译 OpenWrt 24.10 固件。
 > **时间:** 2026-06 ｜ **平台:** WSL2 (Ubuntu) ｜ **目标:** mediatek_filogic (MT7981)
@@ -73,9 +77,13 @@ CONFIG_DEVICE_xiaomi_mi-router-ax3000t-an8855=y
 |------|------|------|
 | `target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts` | **新建** | AN8855 设备树 — 定义单 UBI 分区布局 (112MB) |
 | `target/linux/mediatek/image/filogic.mk` | **修改** | 添加 `xiaomi_mi-router-ax3000t-an8855` 镜像构建目标 |
-| `target/linux/mediatek/filogic/base-files/etc/board.d/02_network` | **修改** | 新增 AN8855 的 VLAN 划分、MAC 地址获取规则，默认 IP 设为 `192.168.31.1` |
+| `target/linux/mediatek/filogic/base-files/etc/board.d/02_network` | **修改** | 新增 AN8855 的 VLAN 划分、MAC 地址获取规则,默认 IP 设为 `192.168.31.1` |
 | `target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh` | **修改** | 添加 AN8855 的 mtdparts 初始化和系统升级入口 |
-| `target/linux/mediatek/filogic/base-files/etc/board.d/04_defaults` | **修改** | 添加 AN8855 默认 WiFi 配置（首次启动自动开启） |
+
+> ℹ️ **当前实际改动范围(以 `patches/` 为准):** 上述 4 项。早期曾改过
+> `etc/board.d/04_defaults` 来加 WiFi 默认配置,现已**废弃**——首启 WiFi/LAN 定制改由
+> `setup.sh` 注入的 `uci-defaults/99-router-home-custom` 脚本实现(见 `setup.sh` 步骤 6)。
+> 所有改动都由 `setup.sh` 步骤 2.5 自动应用(dry-run 校验 + 生效校验)。
 
 ### 3.2 编译环境适配（WSL 专有）
 
@@ -277,6 +285,8 @@ make → fakeroot → faked (daemon, background)
 | `make: Nothing to be done` | stamp 文件存在但产物缺失 | `rm staging_dir/.../stamp/.target` |
 | 刷机起不来，落回恢复页 | 用了 stock 双分区目标 | 必须用 `-an8855` 单 UBI 目标，见 §5 |
 | **OpenClash 菜单不显示** | `ls /usr/lib/lua/luci/controller/openclash.lua` | 主线 LuCI 26 删了 Lua，需选 `luci-compat`，见 §8 |
+| **内核 prepare 报 `Patch failed! .../patches/0001...`** | `setup.sh` 里用了 `PATCH_DIR` 变量名 | 改名 `REPO_PATCH_DIR`，见 §9 |
+| **体积校验误报 factory.ubi 超限** | 拿 `.ubi` 容器当 FIT 判体积 | 只盯 `-initramfs-kernel.bin`(FIT)，见 §10 |
 
 ## 8. OpenClash + LuCI 26 兼容性(Lua 运行时缺失)
 
@@ -303,4 +313,41 @@ apk update && apk add luci-compat   # main 用 apk;旧版用 opkg install luci-c
 
 ---
 
-*文档生成于 2026-06-05，基于 OpenWrt 24.10 (Linux 6.6.141) 的实际编译过程。*
+## 9. 坑:PATCH_DIR 环境变量污染内核补丁路径(2026-08-15 实测)
+
+**现象:** `setup.sh build` 在内核 prepare 阶段报:
+```
+Patch failed!  Please fix /home/hugh/.../patches/0001-add-an8855-target.patch!
+No file to patch.  Skipping patch.
+```
+即 OpenWrt 把**外层仓库的 `patches/` 目录当成内核补丁目录**,尝试把 an8855 **目标文件补丁**
+(filogic.mk / platform.sh / 02_network)应用到内核树,当然"No file to patch"。
+
+**根因:** OpenWrt 的 `include/kernel.mk:43` 用**条件赋值**定义:
+```make
+PATCH_DIR ?= $(CURDIR)/patches-$(KERNEL_PATCHVER)
+```
+而旧版 `setup.sh` 里 `export PATCH_DIR=".../patches"`(指外层仓库的补丁目录)会**预定义**该变量,
+`?=` 因此不再赋默认值 —— 内核构建于是把外层 `patches/` 当作 `$(PATCH_DIR)` 去打内核补丁。
+
+**修复:** 把 `setup.sh` 里的变量改名为 `REPO_PATCH_DIR`(与 OpenWrt 内部变量彻底隔离),
+`export REPO_PATCH_DIR=".../patches"`,所有引用处同步改名。**绝不要用 `PATCH_DIR`/`FILES_DIR`/
+`KDIR` 这类与 OpenWrt Makefile 同名的变量。**
+
+**验证:** 改名后内核 prepare 正常打补丁、编译到内核/软件包全部通过。
+
+## 10. 坑:initramfs 体积校验要盯 FIT,不是 factory.ubi
+
+**现象:** `check-image-size.sh` 把 `-initramfs-factory.ubi`(27MB)报成"超 26MB 上限"而失败。
+
+**根因:** 原厂 U-Boot 加载进 RAM 的是 **FIT 内核镜像**(`*-initramfs-kernel.bin`,实际是 DTB 格式的
+FIT,`file` 显示 "Device Tree Blob version 17"),本机实测 **24.9MB**。而 `-initramfs-factory.ubi`
+是**写给 NAND 的 UBI 容器**(含 UBI 头 + 擦除块对齐),比 FIT 大(27MB),**U-Boot 并不直接加载它**,
+不能拿它判体积。
+
+**修复:** 体积校验只针对 `*-initramfs-kernel.bin` / `*.itb`(FIT),排除 `.ubi`。判断上限用的
+唯一指标是 FIT 大小。
+
+---
+
+*本文初稿生成于 2026-06-05(基于 OpenWrt 24.10 Linux 6.6.141);§9/§10 为 2026-08-15 主线(main ~6.18)实测补充。*

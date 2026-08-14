@@ -3,8 +3,9 @@
 本仓库指导为 **Xiaomi Mi Router AX3000T(AN8855 交换芯片版本)** 从 **OpenWrt 主线 (main)** 编译纯净固件,并集成 **Tailscale**;Clash/Mihomo 客户端 **OpenClash 以独立 apk 提供**(不进固件,避免镜像超原厂 U-Boot 加载上限)。
 
 > **更新要点(相对旧版):**
-> - OpenWrt 主线 (内核 ≈6.18) **已原生支持 AN8855 交换芯片**,DTS/驱动都在主线里,不再需要任何 target 源码补丁。
-> - ⚠️ **2026-08-14 实测修正:** 主线 stock 目标 `xiaomi_mi-router-ax3000t`(**双分区** ubi_kernel+ubi)在**原厂 U-Boot + AN8855** 上 sysupgrade 后无法持久启动(实测两次落回原厂恢复页)。已在 main 上重建 **单 UBI 目标 `xiaomi_mi-router-ax3000t-an8855`**(与旧 24.10 官方 an8855 布局一致:单 `ubi` 112MB @0x600000),用该目标编译/刷机。
+> - OpenWrt 主线 (内核 ≈6.18) **已原生支持 AN8855 交换芯片**(DTS/驱动都在主线里),但**仅限驱动/内核层面**;
+>   仍需用 `patches/` 重建 **单 UBI 目标** 才能在原厂 U-Boot 上持久启动(见下条)。
+> - ⚠️ **2026-08-14 实测修正:** 主线 stock 目标 `xiaomi_mi-router-ax3000t`(**双分区** ubi_kernel+ubi)在**原厂 U-Boot + AN8855** 上 sysupgrade 后无法持久启动(实测两次落回原厂恢复页)。已在 main 上重建 **单 UBI 目标 `xiaomi_mi-router-ax3000t-an8855`**(与旧 24.10 官方 an8855 布局一致:单 `ubi` 112MB @0x600000),用该目标编译/刷机。**该目标由 `setup.sh` 自动应用 `patches/` 补丁重建,非主线自带。**
 > - 去掉自定义 **fwx 内核补丁** 和 **FanchmWrt 主题**,保持纯净主线。
 > - 增加 **OpenClash** 作为额外 feed。
 > - 🧰 **内置精简工具集**:iptables+nftables 双栈、zram 内存压缩、核心 netfilter、wireguard 隧道、QoS(tc/cake/fq-pie)、ext4、tcpdump/ipset/tc-full 等诊断工具(内核模块只能编译期打入,已预置;重文件系统/USB 等已剔除以适配原厂 U-Boot 体积上限)。
@@ -40,7 +41,7 @@
 ### 主线对 AN8855 的支持方式
 
 主线 `target/linux/mediatek/dts/mt7981b-xiaomi-mi-router-common.dtsi` 同时声明了 **MT7531** 与 **AN8855** 两个交换节点。内核启动时通过 MDIO 探测,只有实际存在的芯片会成功注册为 DSA switch,因此**驱动/网络层面**两份固件通用。⚠️ 但**启动布局必须区分硬件**:
-- **AN8855(外挂交换,本机)+ 原厂 U-Boot** → 用 `xiaomi_mi-router-ax3000t-an8855`(**单 UBI**,本仓库重建的目标)。
+- **AN8855(外挂交换,本机)+ 原厂 U-Boot** → 用 `xiaomi_mi-router-ax3000t-an8855`(**单 UBI**,本仓库 `patches/` 重建的目标,`setup.sh` 自动应用)。
 - MT7531 版 → 官方 `xiaomi_mi-router-ax3000t`(双分区)。
 - 刷过 OpenWrt U-Boot → `xiaomi_mi-router-ax3000t-ubootmod`。
 
@@ -99,9 +100,9 @@ bash setup.sh build
 ```
 
 `setup.sh` 会自动:
-1. 浅克隆 OpenWrt `main` 分支到 `openwrt-ax3000t/`;
+1. 浅克隆 OpenWrt `main` 分支到 `openwrt-ax3000t/`(**锁定到 `patches/VERIFIED_COMMIT` 记录的已验证 commit**,防主线漂移;置空则跟随最新);
 2. 在 `feeds.conf` 追加 OpenClash feed;
-3. **应用 `patches/` 里的 an8855 单 UBI 目标补丁**(filogic.mk / platform.sh / 02_network / DTS,已应用则跳过);
+3. **应用 `patches/` 里的 an8855 单 UBI 目标补丁**(先 dry-run 全量校验、应用后再校验生效,防"看似成功实则失效");
 4. `./scripts/feeds update -a && install -a`;
 5. `make defconfig` 生成默认配置(已含 an8855 目标、Tailscale、**精简工具集**;**不含 OpenClash**,单独编译为 apk);
 6. 写入 **USTC apk 镜像**(`CONFIG_VERSIONOPT=y` + `CONFIG_VERSION_REPO`)。
@@ -312,7 +313,8 @@ PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':') make package
 ### Q: 想换回 24.10 稳定分支?
 
 把 `setup.sh` 里的 `--branch main` 改成 `--branch openwrt-24.10`。24.10 **自带官方
-`xiaomi_mi-router-ax3000t-an8855` 单 UBI 目标**(无需自定义,即旧固件所用),同样内置 AN8855 支持。
+`xiaomi_mi-router-ax3000t-an8855` 单 UBI 目标**(无需自定义补丁,即旧固件所用),同样内置 AN8855 支持,
+是比 main + 补丁更稳的替代路线。
 
 ### Q: 为什么主线 stock 目标刷完 sysupgrade 起不来?
 
