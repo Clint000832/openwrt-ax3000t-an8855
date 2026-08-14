@@ -145,3 +145,168 @@ UBI 设备: `ubi0`, LEB 126976 B (124 KiB), 896 LEB (108.5 MiB), 保留 17 个�
 ---
 
 之后刷机/编译碰到任何"设备当前状态"问题,先看本文 §3-§5,不要重新上路由器抓。
+
+---
+
+## 7. 运行时配置(2026-08-14:网络 / DNS / Tailscale)
+
+> 本节记录在**已刷入的主线持久系统**上手动配置的运行时状态,供交接与复现参考。
+
+**SSH:** `ssh root@192.168.31.1`(当前可空密码或已配的密码登录)。
+
+### 7.1 网络(`uci show network`)
+
+| 项 | 值 |
+|----|----|
+| LAN 接口 | `br-lan`,static `192.168.31.1/24`,桥接端口 `lan2 lan3 lan4` |
+| WAN 接口 | `wan`,proto `dhcp`(上游网络下发,实为 `192.168.110.x/24`) |
+| WAN6 | `wan6`,proto `dhcpv6` |
+| DHCP | 范围 `100~249`,租期 `12h`,`ra=server`,`dhcpv4/dhcpv6=server` |
+| 防火墙 zone | lan: ACCEPT;wan: REJECT + masq |
+
+### 7.2 DNS(`uci show dhcp.@dnsmasq[0]`)
+
+- 上游 `server = 223.5.5.5, 114.114.114.114`(国内公共 DNS)
+- `noresolv = 1`(忽略 WAN 下发,只用上面两个上游)
+- **已移除** Tailscale 的 `/.ts.net/100.100.100.100` 转发(见下)
+- 验证:`nslookup baidu.com 127.0.0.1` 正常解析
+
+### 7.3 Tailscale(`uci show tailscale`)
+
+| 键 | 值 | 说明 |
+|----|----|------|
+| `service_enabled` | `1` | 服务随开机自启 |
+| `fw_mode` | `nftables` | 默认防火墙模式 |
+| `dns_mode` | `disabled` | **禁用 MagicDNS**(不做 `.ts.net` 域名转发) |
+| `accept_routes` | `1` | 接收组网内其他子网路由 |
+| `advertise_exit_node` | `0` | 不充当出口节点 |
+| `advertise_routes` | `192.168.31.0/24` | 子网路由,双向互通 |
+| `nosnat` | `0` | 启用 SNAT(局域网访问组网走 NAT) |
+| `ssh` | `1` | 允许 Tailscale SSH |
+
+**当前节点:** `router-home`,Tailscale IP `100.10.0.1`,`tailscale status` 在线。
+
+**开机自启(已确认 rc.d 软链):**
+- `S80tailscale` → 启动 `tailscaled`(procd respawn,掉线自动拉起)
+- `S99tailscale-settings` → 开机应用 `tailscale set` 设置与 DNS 转发维护
+- `K10tailscale-settings` → 关机前清理
+
+**运行逻辑:**
+- 局域网设备(192.168.31.x)**无需自装 Tailscale**,直接访问组网设备(100.x.x.x)
+  —— 依赖 `tailscale0` 接口 + `ts-forward` 链(收 lan→tailscale0)+ NAT SNAT。
+- 组网远程设备**反向访问**局域网:靠 `advertise-routes=192.168.31.0/24`,
+  **需在 Tailscale Admin 后台批准该子网路由**后才生效。
+- MagicDNS 已禁用:不做 `.ts.net` 域名解析,一律按 IP 访问。
+
+**复现命令(如需重配):**
+```
+uci set tailscale.settings.service_enabled=1
+uci set tailscale.settings.dns_mode=disabled
+uci set tailscale.settings.accept_routes=1
+uci -q delete tailscale.settings.advertise_routes
+uci add_list tailscale.settings.advertise_routes=192.168.31.0/24
+uci commit tailscale
+/etc/init.d/tailscale enable
+/etc/init.d/tailscale-settings enable
+/etc/init.d/tailscale start
+/etc/init.d/tailscale-settings start
+# 若节点未认证:tailscale up,登录 tailscale.com/a/xxx
+```
+
+## 8. 无线配置(2026-08-14:适配中国居民楼)
+
+> 针对密集居民楼(邻居 WiFi 多、墙体厚)做的最优化配置。SSID 统一为 `OpenWrt-AX3000T`。
+
+| 项 | 2.4GHz(radio0) | 5GHz(radio1) |
+|----|----------------|--------------|
+| 国家码 `country` | `CN` | `CN` |
+| 信道 `channel` | **6**(扫描避开拥挤的 1/11) | **36**(HE80,中心 42) |
+| 带宽 `htmode` | `HE20`(拥挤环境稳定优先) | `HE80`(用户选高带宽) |
+| 发射功率 `txpower` | 20 dBm | 23 dBm |
+| SSID | `MyHome` | `MyHome`(统一,自动选频) |
+| 加密 `encryption` | `sae-mixed`(WPA3/WPA2) | `sae-mixed` |
+| 密码 `key` | 已设(用户配置) | 同左 |
+| 802.11k `ieee80211k` | 1 | 1 |
+| 802.11v `ieee80211v` | 1 | 1 |
+
+**选信道依据(实扫邻居):**
+- 2.4GHz:信道 1(-36dBm)、11(-32dBm)干扰强,信道 6 相对干净(-81 以下)→ 选 6。
+- 5GHz:149(-41dBm)干扰最强;36-48 中度(-55/-68)→ 保留 36(80MHz 非 DFS 中最优块)。
+
+**⚠️ 踩坑记录(重要):**
+- 开放(无加密)网络上**不能**启用 802.11r / ft_psk / mobility_domain / bss_transition,
+  否则 hostapd 报 `1 errors found in configuration file` + `add_iface failed`,
+  AP 不广播信道(`Channel: 0`)。
+- **即使启用 WPA3(SAE) 加密,`sae-mixed` 下加 802.11r/ft_psk 仍会触发同一 hostapd 错误**。
+  本设备为单 AP,802.11r 快速漫游本用于多 AP 无缝漫游,单机收益极小,故**保持关闭**。
+- 正确做法:仅保留 802.11k / 802.11v(辅助漫游与选频),不开 r/ft。
+
+**复现命令:**
+```
+uci set wireless.radio0.country=CN; uci set wireless.radio1.country=CN
+uci set wireless.radio0.channel=6;    uci set wireless.radio1.channel=36
+uci set wireless.radio0.htmode=HE20;  uci set wireless.radio1.htmode=HE80
+uci set wireless.radio0.txpower=20;   uci set wireless.radio1.txpower=23
+uci set wireless.default_radio0.ssid=OpenWrt-AX3000T
+uci set wireless.default_radio1.ssid=OpenWrt-AX3000T
+uci set wireless.default_radio0.ieee80211k=1
+uci set wireless.default_radio0.ieee80211v=1
+uci set wireless.default_radio1.ieee80211k=1
+uci set wireless.default_radio1.ieee80211v=1
+uci commit wireless; wifi down; wifi up
+```
+
+> ⚠️ **已知限制:** 从路由器 `ping` 组网内其他节点,常规 ICMP 可能 100% 丢包
+> (对端如 router-office 的入站 ICMP 过滤所致),但 `tailscale ping` 通、TCP/UDP 正常,
+> 属对端策略,不影响本机 LAN→组网访问。
+
+---
+
+## 9. 7×24 稳定性调优(2026-08-14)
+
+> 针对家庭路由器长期不间断运行所做的调优。**已确认**:无 OOM/崩溃历史、看门狗正常、
+> 内存健康、WiFi 双频在线、Tailscale 在线。
+
+### 9.1 已实施的内核参数(`/etc/sysctl.d/99-stability.conf`,重启持久)
+
+| 参数 | 值 | 作用 |
+|------|----|------|
+| `vm.swappiness` | `10` | 减少内存换页压力,进程更稳定 |
+| `net.core.netdev_max_backlog` | `4096` | 应对网络突发,降低丢包 |
+| `net.core.somaxconn` | `4096` | 提高连接队列 |
+| `net.ipv4.tcp_slow_start_after_idle` | `0` | 空闲后不重置慢启动,游戏/视频更稳 |
+| `net.netfilter.nf_conntrack_max` | `32768` | 容纳更多家庭设备连接(当前仅用 ~59) |
+| `net.netfilter.nf_conntrack_tcp_timeout_established` | `3600` | 缩短过期连接,防 conntrack 表满 |
+| `net.netfilter.nf_conntrack_udp_timeout` | `60` | 同上 |
+| `net.netfilter.nf_conntrack_icmp_timeout` | `10` | 同上 |
+| `kernel.panic` | `3` | 内核异常 3 秒自动重启(不死机) |
+| `kernel.panic_on_oops` | `1` | oops 触发重启而非挂死 |
+
+### 9.2 硬件看门狗(已确认)
+
+- `procd` 正在喂 `/dev/watchdog`:timeout 30s,每 5s 喂一次,`magicclose=false`。
+- 系统**卡死会自动复位重启**,无需人工干预 → 7×24 不下线的关键保障。
+
+### 9.3 关键服务状态(已确认运行 + procd respawn)
+
+| 服务 | 状态 | 说明 |
+|------|------|------|
+| `dnsmasq` | OK | DNS/DHCP,1.4MB |
+| `odhcpd` | OK | IPv6/DHCPv6 |
+| `hostapd` | OK | WiFi(2.8MB) |
+| `netifd` | OK | 网络接口管理 |
+| `tailscaled` | OK + respawn | Tailscale,76MB(最大,正常),procd 掉线自动拉起 |
+
+**内存画像:** 256MB 总内存,~42MB 可用;日志走 RAM(`/tmp`,tmpfs)不写闪存,减少 NAND 磨损。
+
+### 9.4 刻意不做的操作(避免伤害稳定/闪存)
+
+- **不在 NAND 上建 swap**:swap 频繁写会加速闪存磨损 → 放弃。
+- **zram 交换**:此自定义 SNAPSHOT 固件无 zram 内核模块/包,无法启用 → 放弃。
+- **定时重启**:用户要求"不下线",故**不设**每日/每周自动重启(内存现状无需)。
+
+### 9.5 后续维护建议
+
+- 定期(如每周)`ssh root@192.168.31.1 'tailscale status; uptime; free'` 抽查内存与负载。
+- 若某日 `free` 显示 available 持续 <20MB,优先排查 tailscaled 是否内存泄漏(重启该服务即可)。
+- 固件升级走 §5 initramfs→sysupgrade 流程,勿强刷。
