@@ -21,11 +21,48 @@
 #     加载上限(26MB 可启动)导致反复 panic/复位,已精简以适配。
 #
 # 用法:
-#   1) bash setup.sh          # 只做克隆 + feeds + 配置
-#   2) bash setup.sh build    # 直接开始编译
+#   1) bash setup.sh                     # 只做克隆 + feeds + 配置 (main 分支)
+#   2) bash setup.sh build               # 直接开始编译 (main 分支)
+#   3) bash setup.sh --branch openwrt-24.10 [build]
+#                                        # 换分支编译;非 main 分支跳过补丁与 commit 锁定
+#   (--branch 与 build 可任意顺序;默认 main,行为与旧版一致)
 # ============================================================
 
 set -e
+
+# 先做自身与依赖脚本的 bash 语法自检,语法错误第一时间失败,避免编到一半才崩。
+bash -n "$0"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+bash -n "${SCRIPT_DIR}/scripts/check-image-size.sh"
+
+# ---- 参数解析:支持 --branch <分支> 与位置参数 build,任意顺序 ----
+BRANCH="main"
+BUILD_MODE=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --branch)
+            [ $# -ge 2 ] || { echo "  ❌ --branch 需带分支名,示例: bash setup.sh --branch openwrt-24.10" >&2; exit 1; }
+            BRANCH="$2"
+            shift 2
+            ;;
+        --branch=*)
+            BRANCH="${1#*=}"
+            shift
+            ;;
+        build)
+            BUILD_MODE=1
+            shift
+            ;;
+        *)
+            echo "  ❌ 未知参数: $1 (支持: build / --branch <分支>)" >&2
+            exit 1
+            ;;
+    esac
+done
+if [ -z "$BRANCH" ]; then
+    echo "  ❌ --branch 分支名为空" >&2
+    exit 1
+fi
 
 export OPENWRT_DIR="$(pwd)/openwrt-ax3000t"
 # 外层仓库的 patches/ 目录(含 an8855 目标补丁),相对本脚本所在目录推导
@@ -46,18 +83,22 @@ else
 fi
 
 echo ""
-echo "=== 步骤 1: 克隆 OpenWrt 主线 ==="
+echo "=== 步骤 1: 克隆 OpenWrt (分支: $BRANCH) ==="
 if [ ! -d "$OPENWRT_DIR" ]; then
-    git clone --depth 1 --branch main --single-branch \
+    git clone --depth 1 --branch "$BRANCH" --single-branch \
         https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
 fi
-if [ -n "$OPENWRT_COMMIT" ]; then
+# commit 锁定仅对 main 生效(VERIFIED_COMMIT 记录的是 main 分支已验证 commit)。
+# 其它分支(如 openwrt-24.10)历史不同,不能直接 checkout 该 sha,故跳过锁定。
+if [ "$BRANCH" = "main" ] && [ -n "$OPENWRT_COMMIT" ]; then
     echo "  锁定到已验证 commit: $OPENWRT_COMMIT"
     git -C "$OPENWRT_DIR" fetch --depth 1 origin "$OPENWRT_COMMIT" \
         || { echo "  无法获取 commit $OPENWRT_COMMIT,检查 patches/VERIFIED_COMMIT" >&2; exit 1; }
     git -C "$OPENWRT_DIR" checkout --force "$OPENWRT_COMMIT"
-else
+elif [ "$BRANCH" = "main" ]; then
     echo "  ⚠️ 未设置 OPENWRT_COMMIT(patches/VERIFIED_COMMIT 缺失),跟随 main 最新,补丁可能漂移失效。"
+else
+    echo "  非 main 分支($BRANCH),跳过 commit 锁定与 an8855 补丁,跟随分支最新。"
 fi
 
 cd "$OPENWRT_DIR"
@@ -80,11 +121,14 @@ else
 fi
 
 echo ""
-echo "=== 步骤 2.5: 应用 an8855 单 UBI 目标补丁(关键!) ==="
+echo "=== 步骤 2.5: 应用 an8855 单 UBI 目标补丁(仅 main 分支,关键!) ==="
 # 主线 main 只有 stock 双分区 / ubootmod 目标,AN8855 + 原厂 U-Boot 需要
 # 独立的单 UBI 目标才能持久启动。补丁文件固化在外层仓库 patches/ 下。
 # 若已应用(设备已在 filogic.mk 中定义)则跳过,避免重复打补丁报错。
-if grep -q "Device/xiaomi_mi-router-ax3000t-an8855" target/linux/mediatek/image/filogic.mk; then
+# 非 main 分支(如 openwrt-24.10)官方自带 an8855 单 UBI 目标,无需补丁,整体跳过。
+if [ "$BRANCH" != "main" ]; then
+    echo "  非 main 分支($BRANCH),官方自带 an8855 单 UBI 目标,跳过补丁应用"
+elif grep -q "Device/xiaomi_mi-router-ax3000t-an8855" target/linux/mediatek/image/filogic.mk; then
     echo "  an8855 目标已存在,跳过打补丁"
 else
     echo "  复制 DTS ..."
@@ -401,7 +445,7 @@ echo "  已注入: $UCIDEF_DIR/99-router-home-custom"
 echo "  首次启动: LAN=192.168.31.1, WiFi SSID: OpenWrt-AX3000T / OpenWrt-AX3000T-5G (无加密)"
 echo "  请尽快在 LuCI 中设置 root 密码与 WiFi 加密!"
 
-if [ "$1" = "build" ]; then
+if [ "$BUILD_MODE" = "1" ]; then
     echo ""
     echo "=== 步骤 7: 开始编译(固件不含 OpenClash) ==="
     echo "  运行: make -j\$(nproc) V=s | tee build.log"

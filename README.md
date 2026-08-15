@@ -1,5 +1,17 @@
 # 为 Xiaomi Mi Router AX3000T (AN8855) 编译 OpenWrt 主线 + OpenClash
 
+> **时间**：2026-08-15
+> **作者**：hugh
+> **适用范围**：Xiaomi Mi Router AX3000T（AN8855 交换芯片版）OpenWrt 主线固件构建
+> **文档目的**：面向使用者的编译、刷机、OpenClash 安装与常见问题手册。
+> **状态**：生效（2026-08-14 实测修正后）
+
+## 变更记录
+
+| 版本 | 日期 | 作者 | 变更说明 |
+|------|------|------|----------|
+| 1.0 | 2026-08-15 | hugh | 补充 DOC_HEADER 头部；记录主线 stock 双分区目标不可用、改为单 UBI 目标重建的实测结论 |
+
 本仓库指导为 **Xiaomi Mi Router AX3000T(AN8855 交换芯片版本)** 从 **OpenWrt 主线 (main)** 编译纯净固件,并集成 **Tailscale**;Clash/Mihomo 客户端 **OpenClash 以独立 apk 提供**(不进固件,避免镜像超原厂 U-Boot 加载上限)。
 
 > **更新要点(相对旧版):**
@@ -22,6 +34,7 @@
 4. [手动步骤(可选)](#4-手动步骤可选)
 5. [刷入路由器](#5-刷入路由器)(本机路径见 `ROUTER_STATE.md`)
 6. [常见问题](#6-常见问题)
+7. [已知问题](#7-已知问题)
 
 ---
 
@@ -312,15 +325,56 @@ PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':') make package
 
 ### Q: 想换回 24.10 稳定分支?
 
-把 `setup.sh` 里的 `--branch main` 改成 `--branch openwrt-24.10`。24.10 **自带官方
-`xiaomi_mi-router-ax3000t-an8855` 单 UBI 目标**(无需自定义补丁,即旧固件所用),同样内置 AN8855 支持,
-是比 main + 补丁更稳的替代路线。
+```bash
+bash setup.sh --branch openwrt-24.10        # 只准备
+bash setup.sh --branch openwrt-24.10 build  # 准备并直接编译
+```
+
+24.10 **自带官方 `xiaomi_mi-router-ax3000t-an8855` 单 UBI 目标**(无需自定义补丁,即旧固件所用),
+同样内置 AN8855 支持,是比 main + 补丁更稳的替代路线。`setup.sh` 在非 main 分支下会自动
+**跳过 an8855 补丁应用与 `patches/VERIFIED_COMMIT` commit 锁定**(该锁定仅对 main 有效)。
 
 ### Q: 为什么主线 stock 目标刷完 sysupgrade 起不来?
 
 AN8855 + 原厂 U-Boot 只认**单 UBI** 布局。主线 stock 目标是**双分区**(ubi_kernel+ubi),sysupgrade
 后重启落回原厂恢复页。已重签方案:在 main 上重建 `-an8855` 单 UBI 目标,用它的 initramfs/sysupgrade
 产物刷机。详见 `ROUTER_STATE.md` §0。
+
+---
+
+## 7. 已知问题
+
+> 已实测结论,供排障优先索引;详细数据与复现见 `ROUTER_STATE.md`。
+
+### K1: 原厂 U-Boot + AN8855 必须用单 UBI 布局(实测 2026-08-14)
+
+- **症状**:stock 双分区目标 `xiaomi_mi-router-ax3000t` sysupgrade 后重启落回原厂恢复页,无法持久启动(实测两次)。
+- **根因**:原厂 U-Boot 只认单 `ubi` 分区布局(kernel+rootfs+rootfs_data 同一分区),主线 stock 目标为双分区(ubi_kernel+ubi)。
+- **修复**:必须用 `xiaomi_mi-router-ax3000t-an8855` 单 UBI 目标(本仓库 `patches/` 在 main 上重建;24.10 分支官方自带)。
+- **验证**:initramfs→sysupgrade 后能持久启动进入主线系统。
+- **注意**:刷过 OpenWrt U-Boot 的机器才用 `-ubootmod`,本机(原厂 U-Boot)勿选。
+
+### K2: initramfs-FIT 超原厂 U-Boot 加载上限会反复 panic/复位(实测)
+
+- **症状**:initramfs 达 27.9MB 时内核反复 panic/复位;34MB 直接起不来;26MB 可正常启动。
+- **根因**:原厂 U-Boot 对 FIT 镜像有加载体积上限(约 26MB 内可启动)。
+- **修复**:精简 kmod/工具集至 26MB 内(`setup.sh` 已预置精简版);OpenClash 单独编译为 apk 不进固件。
+- **验证**:`scripts/check-image-size.sh` 对 `*-initramfs-kernel.bin/*.itb` 做阈值校验(STRICT=1 超限即中断)。
+- **注意**:`*-initramfs-factory.ubi` 是 UBI 容器(含头/对齐),比 FIT 大,U-Boot 不直接加载,不参与体积判定。
+
+### K3: OpenClash 装好但 LuCI 菜单不显示
+
+- **症状**:`apk add luci-app-openclash` 后 `/usr/lib/lua/luci/controller/openclash.lua` 存在于系统但菜单不出现。
+- **根因**:主线 LuCI 26 移除了 Lua 运行时,OpenClash 是纯 Lua 应用,缺 `luci-compat`(含 `luci-lua-runtime`)。
+- **修复**:`apk add luci-compat` 后 `/etc/init.d/uhttpd restart`。
+- **验证**:刷新 LuCI,服务 > OpenClash 出现。
+- **注意**:固件内已内置 `luci-compat`+`luci-lua-runtime`,`apk add luci-app-openclash` 会自动复用。
+
+### K4: `setup.sh` 换分支后行为差异(main / 24.10)
+
+- main(默认):克隆 main + commit 锁定(`patches/VERIFIED_COMMIT`)+ 应用 an8855 补丁。
+- `openwrt-24.10`:跳过 commit 锁定与补丁(官方自带 an8855 单 UBI 目标),跟随分支最新。
+- **注意**:VERIFIED_COMMIT 只对 main 分支有效,切到 24.10 后不要手工执行该 commit 的 checkout(历史不同会失败)。
 
 ---
 
