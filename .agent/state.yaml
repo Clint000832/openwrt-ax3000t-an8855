@@ -1,0 +1,74 @@
+version: 1
+project:
+  name: "openwrt-ax3000t-an8855"
+  root: "/Users/hugh/Documents/openwrt-ax3000t-an8855"
+  visibility: public
+  reviewed_at: "2026-08-17"
+  reviewed_commit: "c1e0ce90fad4d59229a04be944d5a6e2b9985edf"
+
+knowledge:
+  project_state: .agent/project-state.md
+  project_map: null
+  active_task: null
+
+authority:
+  code: repository
+  development_docs: repository
+  operations_docs: null
+
+documentation:
+  readme_agent_block: true
+  known_drift: []
+
+safety:
+  max_data_classification: P1
+  secret_scan: unknown
+  internal_asset_scan: unknown
+
+# 运行时状态（按 01.md §8 必填）
+current_task: "项目初始化与验证"
+task_id: "20260817-project-bootstrap"
+risk_level: R0
+auth_status: 已授权
+base_commit: "c1e0ce90fad4d59229a04be944d5a6e2b9985edf"
+allowed_read_paths:
+  - "README.md"
+  - "ROUTER_STATE.md"
+  - "BUILD_EXPERIENCE.md"
+  - "PROJECT.md"
+  - "setup.sh"
+  - "patches/**"
+  - "scripts/**"
+  - "docs/**"
+  - ".git/**"
+  - ".agent/**"
+allowed_write_paths:
+  - ".agent/**"
+  - "README.md"  # 仅 Agent 管理区块
+forbidden_paths:
+  - ".env*"
+  - "**/secrets/**"
+  - "**/migrations/**"
+  - "package.json"
+  - "lockfiles"
+completed_verifications:
+  - "git-status"
+  - "readme-exists"
+  - "agent-block-exists"
+unresolved_risks: []
+last_l2_action: null
+handoff_notes: null
+expires_at: "2026-08-24"
+
+# 快照元数据（增量快照机制）
+snapshot:
+  version: 1
+  generated_at: "2026-08-17"
+  base_commit: "c1e0ce90fad4d59229a04be944d5a6e2b9985edf"
+  branch: "master"
+  workspace_fingerprint: "openwrt-build-project"
+  structure_fingerprint: "single-repo-docs-patches-scripts"
+  last_incremental_sync: "2026-08-17"
+  changed_modules_since_snapshot: []
+  cache_status: valid
+  invalidation_reason: null

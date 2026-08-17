@@ -387,3 +387,17 @@ AN8855 + 原厂 U-Boot 只认**单 UBI** 布局。主线 stock 目标是**双分
 ---
 
 **许可证:** GPL-2.0,与 OpenWrt 一致。
+
+<!-- AGENT-MANAGED:START -->
+> **Agent 维护区块**：本区块由 Agent 自动维护（规范 AGENTS.md §5），记录 Agent 项目状态入口。人工内容不受影响。
+
+| 入口 | 说明 |
+|---|---|
+| [.agent/project-state.md](.agent/project-state.md) | 项目知识状态：已读证据、技术栈、入口、约定、未知项、核验时间、当前提交、推荐下一步 |
+| `.agent/plans/active/` | 当前任务计划（有明确任务时生成，task-id 默认 `YYYYMMDD-短英文任务名`） |
+
+**当前状态**（2026-08-17 更新）：
+- 当前任务：20260817-project-bootstrap（全局 Skills 体系验证）
+- 最后核验：2026-08-17
+- 状态：R0 完成，缓存有效
+<!-- AGENT-MANAGED:END -->
