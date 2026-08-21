@@ -25,16 +25,18 @@
 | Documentation | `README.md`, `README.zh.md`, `DEVELOPMENT.md`, `ROUTER_STATE.md`, `BUILD_EXPERIENCE.md` | Build guide, device state, troubleshooting archive | None | Medium | 2026-08-21 |
 | Curated kmod set | `setup.sh` defconfig | Kernel module selection, controls initramfs size < 26MB | OpenWrt kmod | High (size limit) | 2026-08-14 |
 | OpenClash integration | `setup.sh` separate compile | Compile as APK not in firmware, avoids size limit | OpenClash feed | Medium | 2026-08-15 |
+| CI/CD Pipeline | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | Automated builds, scheduled, multi-branch, semantic-release, VERIFIED_COMMIT auto-update | GitHub Actions, semantic-release | Medium | 2026-08-21 |
 
 ## Verification Commands
 
 | Type | Command | Scope | Side Effects | Last Result |
 |------|---------|-------|--------------|-------------|
-| Syntax check | `bash -n setup.sh` | setup.sh | None | Not run |
-| Patch validation | `patch --dry-run -p1 -i patches/0001-add-an8855-target.patch` | patches/ | None | Not run |
-| Image size check | `scripts/check-image-size.sh` | Build artifacts | None | Not run |
+| Syntax check | `bash -n setup.sh` | setup.sh | None | Pass |
+| Patch validation | `patch --dry-run -p1 -i patches/0001-add-an8855-target.patch` | patches/ | None | N/A (needs OpenWrt source) |
+| Image size check | `scripts/check-image-size.sh` | Build artifacts | None | N/A (needs build artifacts) |
 | Git status | `git status` | Repository | None | Pass |
-| Doc verification | `python3 .config/opencode/gates/configuration/verify-project-documentation.py` | All docs | None | Not run |
+| Workflow syntax | `actionlint .github/workflows/` | CI/CD | None | Pass (warnings only) |
+| Script syntax | `bash -n scripts/*.sh` | All scripts | None | Pass |
 
 ## Evidence Read
 
@@ -66,18 +68,16 @@
 
 ## Unknowns
 
-- CI/CD pipeline not yet configured
 - Automated firmware testing not implemented
-- Release automation not configured
+- Hardware test automation not implemented
 
 ## Verification Time
 
 - Last verified: 2026-08-21
-- Verified commit: 5f04e08b8660c0df6f94c4483642f8ebea140da3
+- Verified commit: 1c5eff5 (HEAD)
 
 ## Recommended Next Steps
 
-1. Configure CI/CD (GitHub Actions) for automated builds
-2. Add firmware validation framework
-3. Implement release automation with semantic versioning
-4. Consider adding hardware test automation
+1. Add firmware validation framework (hardware flash testing)
+2. Consider adding hardware test automation
+3. Configure branch protection rules on GitHub (require CI pass)

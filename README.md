@@ -1,5 +1,9 @@
 # OpenWrt Build for Xiaomi AX3000T (AN8855)
 
+![CI Build](https://github.com/Clint000832/openwrt-ax3000t-an8855/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/Clint000832/openwrt-ax3000t-an8855/actions/workflows/release.yml/badge.svg)
+![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)
+
 > **Date**: 2026-08-21
 > **Author**: hugh
 > **Scope**: infrastructure
@@ -191,6 +195,33 @@ ssh root@192.168.31.1 'sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin'
 - LAN: `192.168.31.1`, WiFi: `OpenWrt-AX3000T` / `OpenWrt-AX3000T-5G` (open)
 - **Immediately set root password** and **configure WiFi encryption** in LuCI
 - Install OpenClash: `scp <apk> root@192.168.31.1:/tmp/ && ssh root@192.168.31.1 'apk add /tmp/luci-app-openclash-*.apk && apk add luci-compat'`
+
+---
+
+## CI/CD Pipeline
+
+This project uses **GitHub Actions** for automated builds and **semantic-release** for version management.
+
+### Automated Builds
+
+| Trigger | Branches | Artifacts |
+|---------|----------|-----------|
+| Push / PR | `master`, `openwrt-24.10` | Firmware (`.ubi`, `.bin`) + OpenClash APK |
+| Daily (02:00 UTC) | `master`, `openwrt-24.10` | Same as above |
+| Manual dispatch | Any | Same as above |
+
+**Artifacts** are available for 90 days from the Actions tab. On successful `master` builds, the `VERIFIED_COMMIT` is automatically updated to the current OpenWrt commit SHA.
+
+### Releases
+
+Releases are automated via **semantic-release** on push to `master`:
+
+1. Conventional commits (`feat:`, `fix:`, etc.) determine version bump
+2. Changelog generated and committed
+3. Git tag `vX.Y.Z` created
+4. GitHub Release published with all firmware artifacts
+
+See [DEVELOPMENT.md#cicd-pipeline](DEVELOPMENT.md#cicd-pipeline) for full details.
 
 ---
 

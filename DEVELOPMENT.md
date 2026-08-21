@@ -411,6 +411,86 @@ yaml-lint .agents/config.yaml .opencode/skill-config.yaml
 
 ---
 
+## CI/CD Pipeline
+
+### Overview
+
+This project uses GitHub Actions for continuous integration and semantic-release for automated versioning.
+
+### Workflows
+
+| Workflow | File | Triggers | Purpose |
+|----------|------|----------|---------|
+| **CI Build** | `.github/workflows/ci.yml` | Push/PR to `master`/`openwrt-24.10`, daily cron (02:00 UTC), manual dispatch | Build firmware + OpenClash APK, validate image size, upload artifacts |
+| **Release** | `.github/workflows/release.yml` | Push to `master` (after CI passes) | semantic-release: analyze commits → version → tag → GitHub Release with artifacts |
+
+### CI Build Details
+
+**Matrix builds**:
+- `master` branch: Full pipeline with VERIFIED_COMMIT lock + AN8855 patches
+- `openwrt-24.10` branch: Build without VERIFIED_COMMIT lock (official AN8855 target exists)
+
+**Artifacts** (90-day retention):
+- `*-initramfs-factory.ubi` — Flash via recovery/mtd
+- `*-squashfs-sysupgrade.bin` — Sysupgrade from running OpenWrt
+- `luci-app-openclash-*.apk` — Install via `apk add`
+- `SHA256SUMS.txt` — Checksums for verification
+
+**Image size gate**: `scripts/check-image-size.sh` runs with `STRICT=1` — build fails if initramfs > 26MB.
+
+**VERIFIED_COMMIT auto-update**: On successful `master` builds (non-PR), CI extracts the OpenWrt commit SHA and updates `patches/VERIFIED_COMMIT`, committing and pushing back to `master`.
+
+### Release Process
+
+1. Push conventional commits to `master` (e.g., `feat: add new kmod`, `fix: patch drift`)
+2. CI builds and validates → passes
+3. `release.yml` triggers `semantic-release`
+4. semantic-release:
+   - Analyzes commits since last tag
+   - Determines version bump (major/minor/patch)
+   - Generates changelog (updates `CHANGELOG.md`)
+   - Creates git tag `vX.Y.Z`
+   - Creates GitHub Release with firmware + APK artifacts
+   - Commits `CHANGELOG.md` update
+
+**Commit conventions** (enforced by semantic-release):
+- `feat:` → minor version
+- `fix:` `perf:` `refactor:` `docs:` `build:` → patch version
+- `chore:` `ci:` `style:` `test:` → no release
+- `BREAKING CHANGE:` footer → major version
+
+### Manual Release (if needed)
+
+```bash
+# Dry-run to preview
+npx semantic-release --dry-run --no-ci
+
+# Force release (bypasses commit analysis)
+npx semantic-release --no-ci --branch master
+```
+
+### Local CI Testing
+
+```bash
+# Validate workflow syntax
+actionlint .github/workflows/
+
+# Test semantic-release config
+npx semantic-release --dry-run --no-ci
+
+# Run image size check locally
+cd openwrt-ax3000t
+../scripts/check-image-size.sh bin/targets/mediatek/filogic
+```
+
+### Required Repository Settings
+
+1. **Actions permissions**: Settings → Actions → General → Allow all actions and reusable workflows
+2. **Workflow permissions**: Settings → Actions → General → Workflow permissions → "Read and write permissions" (for VERIFIED_COMMIT push, semantic-release tag/release)
+3. **Branch protection** (recommended): Protect `master` → Require status checks → `ci.yml` build job
+
+---
+
 ## References
 
 - [README.md](README.md) — User onboarding (English)

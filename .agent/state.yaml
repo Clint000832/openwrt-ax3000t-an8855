@@ -4,12 +4,12 @@ project:
   root: "/home/hugh/Projects/openwrt-ax3000t-an8855"
   visibility: public
   reviewed_at: "2026-08-21"
-  reviewed_commit: "5f04e08b8660c0df6f94c4483642f8ebea140da3"
+  reviewed_commit: "1c5eff5"
 
 knowledge:
   project_state: .agent/project-state.md
   project_map: null
-  active_task: .agent/plans/active/20260821-documentation-overhaul.md
+  active_task: null
 
 authority:
   code: repository
@@ -26,52 +26,58 @@ safety:
   internal_asset_scan: unknown
 
 # Runtime state (per 01.md §8 required)
-current_task: "Documentation overhaul: bilingual README + consolidated DEVELOPMENT.md"
-task_id: "20260821-documentation-overhaul"
+current_task: "CI/CD Pipeline: GitHub Actions + semantic-release + VERIFIED_COMMIT auto-update (COMPLETED)"
+task_id: "20260821-ci-cd-pipeline"
 risk_level: L1
-auth_status: authorized
-base_commit: "5f04e08b8660c0df6f94c4483642f8ebea140da3"
+auth_status: completed
+base_commit: "1c5eff5"
 allowed_read_paths:
-  - "README.md"
-  - "README.zh.md"
-  - "DEVELOPMENT.md"
-  - "ROUTER_STATE.md"
-  - "BUILD_EXPERIENCE.md"
-  - "PROJECT.md"
+  - ".github/workflows/**"
   - "setup.sh"
-  - "patches/**"
-  - "scripts/**"
-  - "docs/**"
+  - "scripts/check-image-size.sh"
+  - "patches/VERIFIED_COMMIT"
+  - "patches/0001-add-an8855-target.patch"
+  - "patches/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts"
+  - ".gitignore"
+  - "README.md"
+  - "DEVELOPMENT.md"
+  - ".agent/**"
   - ".git/**"
-  - ".agent/**"
 allowed_write_paths:
-  - ".agent/**"
+  - ".github/workflows/**"
+  - ".releaserc.json"
+  - "scripts/generate-config-seed.sh"
+  - "scripts/inject-firstboot-defaults.sh"
+  - "scripts/update-verified-commit.sh"
+  - ".github/dependabot.yml"
   - "README.md"
   - "README.zh.md"
   - "DEVELOPMENT.md"
+  - ".agent/**"
 forbidden_paths:
   - ".env*"
   - "**/secrets/**"
   - "**/migrations/**"
   - "package.json"
   - "lockfiles"
+  - "openwrt-ax3000t/**"
+  - "bin/**"
 completed_verifications:
   - "git-status"
-  - "readme-exists"
-  - "agent-block-exists"
-  - "bilingual-readme"
-  - "development-md-exists"
-  - "language-selector-present"
+  - "plan-approved"
+  - "workflow-syntax"
+  - "script-syntax"
+  - "semantic-release-config"
 unresolved_risks: []
 last_l2_action: null
-handoff_notes: null
+handoff_notes: "CI/CD pipeline implemented. Workflows: ci.yml (build matrix, scheduled, VERIFIED_COMMIT auto-update), release.yml (semantic-release). Requires GitHub repo settings: Actions permissions (read/write), branch protection on master. L2 actions (tag push, release create, VERIFIED_COMMIT push) gated by workflow success - confirm before enabling."
 expires_at: "2026-08-28"
 
 # Snapshot metadata (incremental snapshot mechanism)
 snapshot:
   version: 1
   generated_at: "2026-08-21"
-  base_commit: "5f04e08b8660c0df6f94c4483642f8ebea140da3"
+  base_commit: "1c5eff5"
   branch: "master"
   workspace_fingerprint: "openwrt-build-project"
   structure_fingerprint: "single-repo-docs-patches-scripts"
@@ -80,5 +86,24 @@ snapshot:
     - "README.md"
     - "README.zh.md"
     - "DEVELOPMENT.md"
+    - ".github/workflows/ci.yml"
+    - ".github/workflows/release.yml"
+    - ".github/dependabot.yml"
+    - ".releaserc.json"
+    - "scripts/generate-config-seed.sh"
+    - "scripts/inject-firstboot-defaults.sh"
+    - "scripts/update-verified-commit.sh"
   cache_status: valid
   invalidation_reason: null
+
+# Harness 运行时状态（R0 阶段初始化）
+harness:
+  local:
+    entries: {}
+    events: []
+    subagent_specs: {}
+  global:
+    entries: {}
+    events: []
+    subagent_specs: {}
+  last_compacted: null

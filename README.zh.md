@@ -1,5 +1,9 @@
 # 为 Xiaomi Mi Router AX3000T (AN8855) 编译 OpenWrt 主线固件
 
+![CI Build](https://github.com/Clint000832/openwrt-ax3000t-an8855/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/Clint000832/openwrt-ax3000t-an8855/actions/workflows/release.yml/badge.svg)
+![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)
+
 > **日期**：2026-08-21
 > **作者**：hugh
 > **范围**：基础设施
@@ -190,6 +194,33 @@ ssh root@192.168.31.1 'sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin'
 - LAN: `192.168.31.1`，WiFi: `OpenWrt-AX3000T` / `OpenWrt-AX3000T-5G` (开放)
 - **立即在 LuCI 设置 root 密码** 并 **配置 WiFi 加密**
 - 安装 OpenClash: `scp <apk> root@192.168.31.1:/tmp/ && ssh root@192.168.31.1 'apk add /tmp/luci-app-openclash-*.apk && apk add luci-compat'`
+
+---
+
+## CI/CD 流水线
+
+本项目使用 **GitHub Actions** 自动构建，**semantic-release** 自动版本管理。
+
+### 自动化构建
+
+| 触发条件 | 分支 | 产物 |
+|----------|------|------|
+| Push / PR | `master`, `openwrt-24.10` | 固件 (`.ubi`, `.bin`) + OpenClash APK |
+| 每日 (UTC 02:00) | `master`, `openwrt-24.10` | 同上 |
+| 手动触发 | 任意 | 同上 |
+
+**产物**在 Actions 页面保留 90 天。`master` 分支构建成功后，会自动将 `VERIFIED_COMMIT` 更新为当前 OpenWrt commit SHA。
+
+### 发布流程
+
+推送到 `master` 时自动触发 **semantic-release**：
+
+1. 按 Conventional Commits (`feat:`, `fix:` 等) 判定版本号增量
+2. 生成变更日志并提交
+3. 创建 Git 标签 `vX.Y.Z`
+4. 发布 GitHub Release 并附带所有固件产物
+
+详见 [DEVELOPMENT.md#cicd-pipeline](DEVELOPMENT.md#cicd-pipeline)。
 
 ---
 

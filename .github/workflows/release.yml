@@ -1,0 +1,64 @@
+name: Release - semantic-release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # Required for creating tags, releases, and committing changelog
+  issues: write    # Required for commenting on issues (if enabled)
+  pull-requests: write  # Required for commenting on PRs (if enabled)
+
+jobs:
+  release:
+    name: semantic-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install semantic-release
+        run: |
+          npm install -g semantic-release @semantic-release/changelog @semantic-release/git conventional-changelog-conventionalcommits
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run semantic-release (dry-run first)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "🔍 Running semantic-release in DRY-RUN mode..."
+          npx semantic-release --dry-run --no-ci
+
+      - name: Run semantic-release
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🚀 Running semantic-release..."
+          npx semantic-release
+
+      - name: Verify release created
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          # Check if a new tag was created
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          echo "Latest tag: $LATEST_TAG"
+          if [ "$LATEST_TAG" != "none" ]; then
+            echo "✅ Release tag created: $LATEST_TAG"
+          else
+            echo "ℹ️ No new release created (no qualifying commits since last release)"
+          fi
