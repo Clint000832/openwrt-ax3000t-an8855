@@ -1,15 +1,15 @@
 version: 1
 project:
   name: "openwrt-ax3000t-an8855"
-  root: "/Users/hugh/Documents/openwrt-ax3000t-an8855"
+  root: "/home/hugh/Projects/openwrt-ax3000t-an8855"
   visibility: public
-  reviewed_at: "2026-08-17"
-  reviewed_commit: "c1e0ce90fad4d59229a04be944d5a6e2b9985edf"
+  reviewed_at: "2026-08-21"
+  reviewed_commit: "5f04e08b8660c0df6f94c4483642f8ebea140da3"
 
 knowledge:
   project_state: .agent/project-state.md
   project_map: null
-  active_task: null
+  active_task: .agent/plans/active/20260821-documentation-overhaul.md
 
 authority:
   code: repository
@@ -25,14 +25,16 @@ safety:
   secret_scan: unknown
   internal_asset_scan: unknown
 
-# 运行时状态（按 01.md §8 必填）
-current_task: "项目初始化与验证"
-task_id: "20260817-project-bootstrap"
-risk_level: R0
-auth_status: 已授权
-base_commit: "c1e0ce90fad4d59229a04be944d5a6e2b9985edf"
+# Runtime state (per 01.md §8 required)
+current_task: "Documentation overhaul: bilingual README + consolidated DEVELOPMENT.md"
+task_id: "20260821-documentation-overhaul"
+risk_level: L1
+auth_status: authorized
+base_commit: "5f04e08b8660c0df6f94c4483642f8ebea140da3"
 allowed_read_paths:
   - "README.md"
+  - "README.zh.md"
+  - "DEVELOPMENT.md"
   - "ROUTER_STATE.md"
   - "BUILD_EXPERIENCE.md"
   - "PROJECT.md"
@@ -44,7 +46,9 @@ allowed_read_paths:
   - ".agent/**"
 allowed_write_paths:
   - ".agent/**"
-  - "README.md"  # 仅 Agent 管理区块
+  - "README.md"
+  - "README.zh.md"
+  - "DEVELOPMENT.md"
 forbidden_paths:
   - ".env*"
   - "**/secrets/**"
@@ -55,20 +59,26 @@ completed_verifications:
   - "git-status"
   - "readme-exists"
   - "agent-block-exists"
+  - "bilingual-readme"
+  - "development-md-exists"
+  - "language-selector-present"
 unresolved_risks: []
 last_l2_action: null
 handoff_notes: null
-expires_at: "2026-08-24"
+expires_at: "2026-08-28"
 
-# 快照元数据（增量快照机制）
+# Snapshot metadata (incremental snapshot mechanism)
 snapshot:
   version: 1
-  generated_at: "2026-08-17"
-  base_commit: "c1e0ce90fad4d59229a04be944d5a6e2b9985edf"
+  generated_at: "2026-08-21"
+  base_commit: "5f04e08b8660c0df6f94c4483642f8ebea140da3"
   branch: "master"
   workspace_fingerprint: "openwrt-build-project"
   structure_fingerprint: "single-repo-docs-patches-scripts"
-  last_incremental_sync: "2026-08-17"
-  changed_modules_since_snapshot: []
+  last_incremental_sync: "2026-08-21"
+  changed_modules_since_snapshot:
+    - "README.md"
+    - "README.zh.md"
+    - "DEVELOPMENT.md"
   cache_status: valid
   invalidation_reason: null
