@@ -1,7 +1,7 @@
 # OpenWrt Build for Xiaomi AX3000T (AN8855)
 
-![CI Build](https://github.com/Clint000832/openwrt-ax3000t-an8855/actions/workflows/ci.yml/badge.svg)
-![Release](https://github.com/Clint000832/openwrt-ax3000t-an8855/actions/workflows/release.yml/badge.svg)
+![CI Build](https://github.com/HughZadora/openwrt-ax3000t-an8855/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/HughZadora/openwrt-ax3000t-an8855/actions/workflows/release.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)
 
 > **Date**: 2026-08-21

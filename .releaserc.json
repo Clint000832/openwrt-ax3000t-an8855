@@ -57,7 +57,7 @@
     "addReleases": "bottom"
   },
   "git": {
-    "pushRepo": "https://github.com/Clint000832/openwrt-ax3000t-an8855.git",
+    "pushRepo": "https://github.com/HughZadora/openwrt-ax3000t-an8855.git",
     "tagFormat": "v${version}"
   }
 }
