@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.0...v1.0.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* repair CI failures and release repo drift ([a081138](https://github.com/HughZadora/openwrt-ax3000t-an8855/commit/a081138604b4222784d32f8ba75940324aef44ff))
+
 # 1.0.0 (2026-08-21)
 
 
