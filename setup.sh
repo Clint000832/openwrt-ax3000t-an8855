@@ -10,7 +10,7 @@
 #     (xiaomi_mi-router-ax3000t-an8855)。patches/ 里的补丁会自动打上。
 #   * 原厂 U-Boot + AN8855 只能用**单 UBI 布局**才能持久启动;
 #     官方 stock 双分区目标 (xiaomi_mi-router-ax3000t) 在本机会落回恢复页,
-#     勿用。详见 ROUTER_STATE.md §0。
+#     勿用。详见 docs/reference/router-state.md §0。
 #   * 无自定义 fwx 内核补丁,保持纯净主线。
 #   * OpenClash (luci-app-openclash) 以独立 apk 提供,不进固件(避免 initramfs
 #     超过原厂 U-Boot 加载体积上限);装时 apk add 并自动拉 luci-compat 等依赖。

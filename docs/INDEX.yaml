@@ -1,0 +1,42 @@
+version: 1
+
+root_readme:
+  purpose: project entry point
+
+sections:
+  architecture:
+    purpose: current system architecture, boundaries, components, and data flows
+
+  development:
+    purpose: local development, tooling, testing, debugging, and engineering conventions
+
+  deployment:
+    purpose: build, release, deployment, environments, and delivery
+
+  operations:
+    purpose: monitoring, backup, maintenance, and ongoing service operation
+
+  runbooks:
+    purpose: executable operational, incident, recovery, and troubleshooting procedures
+
+  reference:
+    purpose: stable factual references, APIs, schemas, configuration, and external systems
+
+  reports:
+    purpose: validation, audit, migration, benchmark, and other time-bounded reports
+
+  proposals:
+    purpose: proposed designs and changes not yet accepted as durable project decisions
+
+  adr:
+    purpose: material architectural decisions with long-term consequences
+
+  plans:
+    purpose: implementation plans for accepted or frozen work
+
+rules:
+  - prefer_existing_section
+  - avoid_duplicate_sources_of_truth
+  - do_not_create_top_level_documentation_without_reason
+  - create_documents_only_when_real_project_knowledge_exists
+  - keep_generated_and_transient_outputs_out_of_docs

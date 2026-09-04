@@ -98,15 +98,17 @@ openwrt-ax3000t-an8855/
 │   ├── mt7981b-xiaomi-mi-router-ax3000t-an8855.dts  # Single UBI DTS
 │   └── VERIFIED_COMMIT                   # Locked mainline commit SHA
 ├── scripts/
-│   └── check-image-size.sh               # Initramfs size validator
+│   ├── check-image-size.sh               # Initramfs size validator
+│   └── repository-check                  # Repository baseline validation
+├── docs/                                 # Durable project docs (see docs/INDEX.yaml)
+│   ├── development/guide.md              # Full developer guide
+│   ├── operations/home-router.md         # Router runtime config (Tailscale, network)
+│   ├── reports/build-experience.md       # Build troubleshooting archive
+│   └── reference/router-state.md         # Device partition/UBI/firmware state log
 ├── openwrt-ax3000t/                      # OpenWrt source (gitignored, created by setup.sh)
 ├── setup.sh                              # One-command build orchestrator
 ├── README.md                             # This file (English)
 ├── README.zh.md                          # Chinese version
-├── DEVELOPMENT.md                        # Full developer guide
-├── PROJECT.md                            # Router runtime config (Tailscale, network)
-├── BUILD_EXPERIENCE.md                   # Build troubleshooting archive
-├── ROUTER_STATE.md                       # Device partition/UBI/firmware state log
 └── .agent/                               # Agent workspace state (auto-generated)
 ```
 
@@ -221,13 +223,13 @@ Releases are automated via **semantic-release** on push to `master`:
 3. Git tag `vX.Y.Z` created
 4. GitHub Release published with all firmware artifacts
 
-See [DEVELOPMENT.md#cicd-pipeline](DEVELOPMENT.md#cicd-pipeline) for full details.
+See [guide.md#cicd-pipeline](docs/development/guide.md#cicd-pipeline) for full details.
 
 ---
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for complete build environment, customization, troubleshooting, and contribution guide.
+See [guide.md](docs/development/guide.md) for complete build environment, customization, troubleshooting, and contribution guide.
 
 ### Common Commands
 
@@ -307,10 +309,10 @@ GPL-2.0 — same as OpenWrt.
 
 ## Links
 
-- [DEVELOPMENT.md](DEVELOPMENT.md) — Complete build guide, troubleshooting, architecture
-- [PROJECT.md](PROJECT.md) — Runtime router config (Tailscale, network, WiFi)
-- [BUILD_EXPERIENCE.md](BUILD_EXPERIENCE.md) — Historical build troubleshooting
-- [ROUTER_STATE.md](ROUTER_STATE.md) — Device partition/UBI/firmware state log
+- [guide.md](docs/development/guide.md) — Complete build guide, troubleshooting, architecture
+- [home-router.md](docs/operations/home-router.md) — Runtime router config (Tailscale, network, WiFi)
+- [build-experience.md](docs/reports/build-experience.md) — Historical build troubleshooting
+- [router-state.md](docs/reference/router-state.md) — Device partition/UBI/firmware state log
 - OpenWrt mainline: https://git.openwrt.org/openwrt/openwrt.git
 - OpenClash: https://github.com/vernesong/OpenClash
 - AX3000T forum: https://forum.openwrt.org/t/openwrt-support-for-router-home/180490

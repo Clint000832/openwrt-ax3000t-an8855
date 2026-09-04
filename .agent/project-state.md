@@ -12,7 +12,7 @@
 - Dev commands: `bash setup.sh` / `bash setup.sh build`
 - Build command: `make -j$(nproc) V=s` (in openwrt-ax3000t/ directory)
 - Test command: No standard test suite; relies on hardware flash verification
-- Documentation entry: `README.md`, `README.zh.md`, `DEVELOPMENT.md`, `ROUTER_STATE.md`, `BUILD_EXPERIENCE.md`
+- Documentation entry: `README.md`, `README.zh.md`, `docs/development/guide.md`, `docs/reference/router-state.md`, `docs/reports/build-experience.md`, `docs/operations/home-router.md`
 - Agent rules entry: Global `/home/hugh/agent-config/AGENTS.md`
 - Current working directory: `/home/hugh/Projects/openwrt-ax3000t-an8855/`
 
@@ -22,7 +22,7 @@
 |--------|------|----------------|------------------|------------|--------------|
 | Build script | `setup.sh` | Clone OpenWrt main, apply patches, configure feeds, generate defconfig | git, patch, make | High (drift lock) | 2026-08-18 |
 | AN8855 patches | `patches/` | Single UBI target rebuild patches, VERIFIED_COMMIT lock | OpenWrt main DTS | Critical (boot layout) | 2026-08-14 |
-| Documentation | `README.md`, `README.zh.md`, `DEVELOPMENT.md`, `ROUTER_STATE.md`, `BUILD_EXPERIENCE.md` | Build guide, device state, troubleshooting archive | None | Medium | 2026-08-21 |
+| Documentation | `README.md`, `README.zh.md`, `docs/development/guide.md`, `docs/reference/router-state.md`, `docs/reports/build-experience.md`, `docs/operations/home-router.md` | Build guide, device state, troubleshooting archive | None | Medium | 2026-08-21 |
 | Curated kmod set | `setup.sh` defconfig | Kernel module selection, controls initramfs size < 26MB | OpenWrt kmod | High (size limit) | 2026-08-14 |
 | OpenClash integration | `setup.sh` separate compile | Compile as APK not in firmware, avoids size limit | OpenClash feed | Medium | 2026-08-15 |
 | CI/CD Pipeline | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | Automated builds, scheduled, multi-branch, semantic-release, VERIFIED_COMMIT auto-update | GitHub Actions, semantic-release | Medium | 2026-08-21 |
@@ -42,10 +42,10 @@
 
 - README.md (new bilingual)
 - README.zh.md (new Chinese mirror)
-- DEVELOPMENT.md (new consolidated)
-- ROUTER_STATE.md
-- BUILD_EXPERIENCE.md
-- PROJECT.md
+- docs/development/guide.md (new consolidated, moved from DEVELOPMENT.md)
+- docs/reference/router-state.md (moved from ROUTER_STATE.md)
+- docs/reports/build-experience.md (moved from BUILD_EXPERIENCE.md)
+- docs/operations/home-router.md (moved from PROJECT.md)
 - setup.sh
 - patches/0001-add-an8855-target.patch
 - patches/mt7981b-xiaomi-mi-router-ax3000t-an8855.dts
@@ -62,8 +62,8 @@
 
 - Conventional Commits for git history
 - Bilingual README (English canonical + Chinese mirror)
-- README = user onboarding; DEVELOPMENT.md = developer guide
-- No duplication between README and DEVELOPMENT.md
+- README = user onboarding; docs/development/guide.md = developer guide
+- No duplication between README and docs/development/guide.md
 - AGENT-MANAGED block at end of README files
 
 ## Unknowns

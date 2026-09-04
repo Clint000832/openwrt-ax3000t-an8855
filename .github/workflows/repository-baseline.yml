@@ -1,0 +1,23 @@
+name: Repository Baseline
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        # Deliberate: stable major tag + Dependabot, no SHA pin (read-only baseline, no secrets).
+        uses: actions/checkout@v7
+      - name: Run repository baseline check
+        run: ./scripts/repository-check

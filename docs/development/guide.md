@@ -8,7 +8,7 @@
 
 ---
 
-This document consolidates all developer-facing information from `PROJECT.md`, `BUILD_EXPERIENCE.md`, and `ROUTER_STATE.md`. For user onboarding, see [README.md](README.md) / [README.zh.md](README.zh.md).
+This document consolidates all developer-facing information from `docs/operations/home-router.md`, `docs/reports/build-experience.md`, and `docs/reference/router-state.md`. For user onboarding, see [README.md](../../README.md) / [README.zh.md](../../README.zh.md).
 
 ---
 
@@ -189,7 +189,7 @@ ls -lh bin/targets/mediatek/filogic/*initramfs-kernel.bin
 
 ## Router Runtime Configuration
 
-*Source: `PROJECT.md` + `ROUTER_STATE.md`*
+*Source: `docs/operations/home-router.md` + `docs/reference/router-state.md`*
 
 ### Network Topology
 
@@ -253,7 +253,7 @@ kernel.panic_on_oops=1
 
 ## Device State Reference
 
-*Source: `ROUTER_STATE.md` (2026-08-14 data)*
+*Source: `docs/reference/router-state.md` (2026-08-14 data)*
 
 ### Hardware
 
@@ -308,7 +308,7 @@ Use: initramfs-factory.ubi → mtd write ubi → reboot → sysupgrade -n squash
 
 ## Historical Build Experience
 
-*Source: `BUILD_EXPERIENCE.md` (2026-06/08 records)*
+*Source: `docs/reports/build-experience.md` (2026-06/08 records)*
 
 ### WSL-Specific Fixes
 
@@ -348,7 +348,7 @@ scripts/check-image-size.sh
 # python3 .config/opencode/gates/configuration/verify-project-documentation.py
 
 # 4. Update docs if user-facing change
-# README.md / README.zh.md / DEVELOPMENT.md
+# README.md / README.zh.md / docs/development/guide.md
 ```
 
 ### Commit Convention
@@ -377,12 +377,12 @@ Example: `fix(patches): correct AN8855 MAC address extraction`
 
 | Decision | Rationale | Reference |
 |----------|-----------|-----------|
-| Single UBI target on mainline | Stock U-Boot + AN8855 only boots single UBI | `ROUTER_STATE.md` §0 |
+| Single UBI target on mainline | Stock U-Boot + AN8855 only boots single UBI | `docs/reference/router-state.md` §0 |
 | OpenClash as APK not in firmware | initramfs >26MB with OpenClash → U-Boot load fail | `README.md` FAQ |
-| Curated kmod set | 179 kmods → 27.9MB initramfs (fail); curated → ~25MB | `BUILD_EXPERIENCE.md` §6.3 |
-| USTC mirror default | Domestic download 28500x faster | `BUILD_EXPERIENCE.md` §4.2 |
+| Curated kmod set | 179 kmods → 27.9MB initramfs (fail); curated → ~25MB | `docs/reports/build-experience.md` §6.3 |
+| USTC mirror default | Domestic download 28500x faster | `docs/reports/build-experience.md` §4.2 |
 | `VERIFIED_COMMIT` lock | Prevent mainline drift breaking patches | `setup.sh` §75-83 |
-| `REPO_PATCH_DIR` not `PATCH_DIR` | Avoids OpenWrt kernel.mk variable collision | `BUILD_EXPERIENCE.md` §9 |
+| `REPO_PATCH_DIR` not `PATCH_DIR` | Avoids OpenWrt kernel.mk variable collision | `docs/reports/build-experience.md` §9 |
 
 ---
 
@@ -405,7 +405,7 @@ python3 .config/opencode/gates/configuration/verify-project-documentation.py
 python3 .config/opencode/gates/configuration/verify-project-documentation.py
 actionlint .github/workflows/
 shellcheck setup.sh scripts/check-image-size.sh
-markdownlint-cli2 README.md README.zh.md DEVELOPMENT.md
+markdownlint-cli2 README.md README.zh.md docs/development/guide.md
 yaml-lint .agents/config.yaml .opencode/skill-config.yaml
 ```
 
@@ -493,10 +493,10 @@ cd openwrt-ax3000t
 
 ## References
 
-- [README.md](README.md) — User onboarding (English)
-- [README.zh.md](README.zh.md) — 用户入门 (中文)
-- [PROJECT.md](PROJECT.md) — Router runtime config (Tailscale, network)
-- [BUILD_EXPERIENCE.md](BUILD_EXPERIENCE.md) — Build troubleshooting archive
-- [ROUTER_STATE.md](ROUTER_STATE.md) — Device partition/UBI/firmware state
+- [README.md](../../README.md) — User onboarding (English)
+- [README.zh.md](../../README.zh.md) — 用户入门 (中文)
+- [home-router.md](../operations/home-router.md) — Router runtime config (Tailscale, network)
+- [build-experience.md](../reports/build-experience.md) — Build troubleshooting archive
+- [router-state.md](../reference/router-state.md) — Device partition/UBI/firmware state
 - OpenWrt Build System: https://openwrt.org/docs/guide-developer/build-system/start
 - AX3000T Forum: https://forum.openwrt.org/t/openwrt-support-for-router-home/180490

@@ -98,15 +98,17 @@ openwrt-ax3000t-an8855/
 │   ├── mt7981b-xiaomi-mi-router-ax3000t-an8855.dts  # 单 UBI DTS
 │   └── VERIFIED_COMMIT                   # 锁定主线已验证 commit SHA
 ├── scripts/
-│   └── check-image-size.sh               # Initramfs 体积校验
+│   ├── check-image-size.sh               # Initramfs 体积校验
+│   └── repository-check                  # 仓库基线校验
+├── docs/                                 # 持久化项目文档 (路由见 docs/INDEX.yaml)
+│   ├── development/guide.md              # 完整开发者指南
+│   ├── operations/home-router.md         # 路由器运行时配置 (Tailscale、网络、WiFi)
+│   ├── reports/build-experience.md       # 编译踩坑归档
+│   └── reference/router-state.md         # 设备分区/UBI/固件状态记录
 ├── openwrt-ax3000t/                      # OpenWrt 源码 (gitignored, setup.sh 创建)
 ├── setup.sh                              # 一键构建编排脚本
 ├── README.md                             # 英文版 (规范版)
 ├── README.zh.md                          # 本文件 (中文镜像版)
-├── DEVELOPMENT.md                        # 完整开发者指南
-├── PROJECT.md                            # 路由器运行时配置 (Tailscale、网络、WiFi)
-├── BUILD_EXPERIENCE.md                   # 编译踩坑归档
-├── ROUTER_STATE.md                       # 设备分区/UBI/固件状态记录
 └── .agent/                               # Agent 工作区状态 (自动生成)
 ```
 
@@ -220,13 +222,13 @@ ssh root@192.168.31.1 'sysupgrade -n /tmp/openwrt-*-squashfs-sysupgrade.bin'
 3. 创建 Git 标签 `vX.Y.Z`
 4. 发布 GitHub Release 并附带所有固件产物
 
-详见 [DEVELOPMENT.md#cicd-pipeline](DEVELOPMENT.md#cicd-pipeline)。
+详见 [guide.md#cicd-pipeline](docs/development/guide.md#cicd-pipeline)。
 
 ---
 
 ## 开发指南
 
-完整构建环境、定制、排障、贡献指南见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+完整构建环境、定制、排障、贡献指南见 [guide.md](docs/development/guide.md)。
 
 ### 常用命令
 
@@ -306,10 +308,10 @@ GPL-2.0 — 与 OpenWrt 一致。
 
 ## 相关链接
 
-- [DEVELOPMENT.md](DEVELOPMENT.md) — 完整构建指南、排障、架构
-- [PROJECT.md](PROJECT.md) — 路由器运行时配置 (Tailscale、网络、WiFi)
-- [BUILD_EXPERIENCE.md](BUILD_EXPERIENCE.md) — 编译踩坑历史记录
-- [ROUTER_STATE.md](ROUTER_STATE.md) — 设备分区/UBI/固件状态日志
+- [guide.md](docs/development/guide.md) — 完整构建指南、排障、架构
+- [home-router.md](docs/operations/home-router.md) — 路由器运行时配置 (Tailscale、网络、WiFi)
+- [build-experience.md](docs/reports/build-experience.md) — 编译踩坑历史记录
+- [router-state.md](docs/reference/router-state.md) — 设备分区/UBI/固件状态日志
 - OpenWrt 主线: https://git.openwrt.org/openwrt/openwrt.git
 - OpenClash: https://github.com/vernesong/OpenClash
 - AX3000T 讨论: https://forum.openwrt.org/t/openwrt-support-for-router-home/180490

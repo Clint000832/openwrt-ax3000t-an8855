@@ -77,7 +77,7 @@ Configure CI/CD pipeline (GitHub Actions) for automated builds with semantic-rel
 - Build artifacts (firmware images) are P2 if containing production configs
 - .env* and secrets/ are forbidden paths
 - openwrt-ax3000t/ source directory is gitignored and forbidden for agent writes
-- Agent writes allowed only in .agent/, .agents/, .github/workflows/, scripts/, patches/, README.md, DEVELOPMENT.md
+- Agent writes allowed only in .agent/, .agents/, .github/workflows/, scripts/, patches/, README.md, README.zh.md, docs/
 
 ---
 
