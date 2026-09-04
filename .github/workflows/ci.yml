@@ -51,8 +51,14 @@ jobs:
       - name: Set up build branch
         if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         run: |
-          # For push/PR, use the triggering branch
-          echo "BUILD_BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
+          # For push, use the triggering branch; for pull_request, use the
+          # target (base) branch — github.ref_name is '<pr>/merge' on PRs and
+          # is not a valid upstream OpenWrt branch.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "BUILD_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
+          else
+            echo "BUILD_BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
 
       - name: Set up build branch (scheduled/dispatch)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
