@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.1...v1.0.2) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** resolve upstream branch from base_ref on pull_request events ([4a397e4](https://github.com/HughZadora/openwrt-ax3000t-an8855/commit/4a397e455e5a8fd4cf97c356dc8f93307735c947))
+
 ## [1.0.1](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.0...v1.0.1) (2026-09-04)
 
 
