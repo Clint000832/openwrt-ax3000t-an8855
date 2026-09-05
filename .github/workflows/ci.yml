@@ -331,15 +331,3 @@ jobs:
         if: ${{ matrix.verified_commit_lock && github.event_name != 'pull_request' && success() }}
         run: |
           bash "${SCRIPT_DIR}/update-verified-commit.sh" "${OPENWRT_DIR}" "${REPO_PATCH_DIR}"
-
-  # Separate job for release triggering (only on master push)
-  release-trigger:
-    name: Trigger Release
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && success()
-    steps:
-      - name: Release triggered
-        run: |
-          echo "Build successful on master - semantic-release will run via release.yml workflow"
-          echo "This job exists to gate release.yml on successful build"

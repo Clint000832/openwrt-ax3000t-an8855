@@ -47,9 +47,10 @@
   },
   "github": {
     "assets": [
-      "bin/targets/mediatek/filogic/*-initramfs-factory.ubi",
-      "bin/targets/mediatek/filogic/*-squashfs-sysupgrade.bin",
-      "bin/packages/aarch64_cortex-a53/openclash/luci-app-openclash-*.apk"
+      "release-assets/*-initramfs-factory.ubi",
+      "release-assets/*-squashfs-sysupgrade.bin",
+      "release-assets/luci-app-openclash_*.apk",
+      "release-assets/SHA256SUMS.txt"
     ],
     "successComment": false,
     "failComment": false,
