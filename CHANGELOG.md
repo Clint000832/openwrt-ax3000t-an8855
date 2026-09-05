@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.2...v1.0.3) (2026-09-05)
+
+
+### Bug Fixes
+
+* **ci:** detect OpenClash APK filenames ([7b15efa](https://github.com/HughZadora/openwrt-ax3000t-an8855/commit/7b15efa7aa38ab4dd4b29294b4382d3295cae5d5))
+
 ## [1.0.2](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.1...v1.0.2) (2026-09-04)
 
 
