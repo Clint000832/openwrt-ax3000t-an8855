@@ -23,7 +23,8 @@ CONFIG_LUCI_LANG_zh_Hans=y
 
 CONFIG_PACKAGE_luci-compat=y
 CONFIG_PACKAGE_luci-lua-runtime=y
-# CONFIG_PACKAGE_luci-app-openclash=y
+# Build OpenClash as a standalone APK, but do not include it in the firmware image.
+CONFIG_PACKAGE_luci-app-openclash=m
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 
 CONFIG_PACKAGE_tailscale=y

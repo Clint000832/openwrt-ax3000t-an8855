@@ -296,15 +296,15 @@ jobs:
         run: |
           cd "$OPENWRT_DIR"
           make package/feeds/openclash/luci-app-openclash/compile V=s 2>&1 | tee -a build.log
-          APK_DIR="$OPENWRT_DIR/bin/packages/aarch64_cortex-a53/openclash"
-          APK_GLOB="$APK_DIR/luci-app-openclash_*.apk"
-          if ! compgen -G "$APK_GLOB" >/dev/null; then
-            echo "❌ OpenClash APK not generated under $APK_DIR"
-            find "$OPENWRT_DIR/bin/packages" -type f -name '*openclash*.apk' -print || true
+          APK_PATH=$(find "$OPENWRT_DIR/bin/packages" -type f -name 'luci-app-openclash*.apk' -print -quit)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ OpenClash APK not generated"
+            find "$OPENWRT_DIR/bin/packages" -type f -iname '*openclash*.apk' -print || true
             exit 1
           fi
+          echo "OPENCLASH_APK=$APK_PATH" >> "$GITHUB_ENV"
           echo "✅ OpenClash APK generated:"
-          ls -lh $APK_GLOB
+          ls -lh "$APK_PATH"
 
       - name: Collect artifacts
         run: |
@@ -314,8 +314,13 @@ jobs:
           # Firmware images
           cp "$TARGET_DIR"/*-initramfs-factory.ubi "$ARTIFACT_DIR"/ 2>/dev/null || true
           cp "$TARGET_DIR"/*-squashfs-sysupgrade.bin "$ARTIFACT_DIR"/ 2>/dev/null || true
-          # OpenClash APK (OpenWrt uses name_version_arch.apk)
-          cp "$OPENWRT_DIR/bin/packages/aarch64_cortex-a53/openclash/luci-app-openclash_*.apk" "$ARTIFACT_DIR"/ 2>/dev/null || true
+          # OpenClash APK (the package directory varies by OpenWrt feed/branch)
+          if [ -n "${OPENCLASH_APK:-}" ] && [ -f "$OPENCLASH_APK" ]; then
+            cp "$OPENCLASH_APK" "$ARTIFACT_DIR"/
+          else
+            echo "❌ OpenClash APK path is missing"
+            exit 1
+          fi
           # SHA256 sums
           (cd "$ARTIFACT_DIR" && sha256sum * > SHA256SUMS.txt 2>/dev/null || true)
           echo "ARTIFACT_DIR=$ARTIFACT_DIR" >> $GITHUB_ENV
