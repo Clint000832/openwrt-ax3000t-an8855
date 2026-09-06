@@ -1,3 +1,11 @@
+## [1.0.4](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.3...v1.0.4) (2026-09-06)
+
+
+### Bug Fixes
+
+* action fail ([cb2c19d](https://github.com/HughZadora/openwrt-ax3000t-an8855/commit/cb2c19d98f299acdf0c7db5e1bd85674dee649e2))
+* **release:** allow validated artifact download ([be1ee7c](https://github.com/HughZadora/openwrt-ax3000t-an8855/commit/be1ee7c8ca7d38529adcacdeab11490f82a9b66c))
+
 ## [1.0.3](https://github.com/HughZadora/openwrt-ax3000t-an8855/compare/v1.0.2...v1.0.3) (2026-09-05)
 
 
